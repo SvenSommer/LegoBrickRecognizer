@@ -127,3 +127,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+/ldraw_data/extracted_data
+/ldraw_data/dowloaded_data
+/trainingsets/colorid
+/trainingsets/partno
