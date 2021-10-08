@@ -36,13 +36,14 @@ image_mover = ImageMover()
 # CREATION of images to train on: Gets the labeled files from the database and moves them into the destination_folder
 if not args.skip_creation:
     image_mover.move_images(args.dir)
-
-if not os.path.exists(args.dir):
-    print("ERROR: working Folder '{}' not existing".format(args.dir))
-    quit()
-
-# SPLITTING of the dataset into training an validation set
-classes_count = image_mover.split_train_test_dataset(args.dir)
+    if not os.path.exists(args.dir):
+        print("ERROR: working Folder '{}' not existing".format(args.dir))
+        quit()
+    print("INFO: Splitting images in training and validation set")
+    # SPLITTING of the dataset into training an validation set
+    classes_count = image_mover.split_train_test_dataset(args.dir)
+else:
+    classes_count = len(next(os.walk(args.dir))[1])
 print("INFO: Found '{}' classes".format(classes_count))
 
 # TRAIN
