@@ -42,7 +42,7 @@ class ImageMover():
 
     def copy_image(self, imagepath, dest_folder, label):
 
-        long_dest_folder = os.path.join(dest_folder, label)
+        long_dest_folder = os.path.join(dest_folder, self.brick_basename_sep(label)[0])
         if not os.path.exists(long_dest_folder):
             # print("    Creating partdestfolder: " + long_dest_folder)
             os.makedirs(long_dest_folder)
@@ -81,6 +81,32 @@ class ImageMover():
                 copyfile(target_file, save_file)
                 os.remove(target_file)
         return classes_count
+
+    def brick_basename_sep(self, bname: str) -> list:
+        """
+        Separate brick name to base and additional names
+        Args:
+            bname: string
+        Returns:
+            List with names
+        Examples:
+            brick_basename_sep('283bc1') -> ['283', 'bc1']
+            brick_basename_sep('283211') -> ['283211']
+            brick_basename_sep('u238') -> ['u238']
+        """
+        name_char_i = 0
+        while True:
+            if name_char_i >= len(bname):
+                break
+            if not bname[name_char_i].isnumeric():
+                if name_char_i == 0:
+                    name_char_i += 1
+                    continue
+                break
+            name_char_i += 1
+        if name_char_i == len(bname):
+            return [bname]
+        return [bname[:name_char_i], bname[name_char_i:]]
 
     def progressBar(self, iterable, prefix='Progress', suffix='Moved', decimals=1, length=50, fill='█', printEnd="\r"):
         """
