@@ -22,10 +22,6 @@ def parse_args() -> Namespace:
         help='Epochs count for training'
     )
     parser.add_argument(
-        '--epochs', type=int, required=False, default=200,
-        help='Epochs count for training'
-    )
-    parser.add_argument(
         '--gpus_count', type=int, required=False, default=1,
         help='GPU used for training'
     )
@@ -45,7 +41,7 @@ if not os.path.exists(args.dir):
     print("ERROR: working Folder '{}' not existing".format(args.dir))
     quit()
 
-# SPLITTING of the dataset into training an validation images
+# SPLITTING of the dataset into training an validation set
 image_mover.split_train_test_dataset(args.dir)
 
 # TRAIN
