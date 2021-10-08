@@ -43,6 +43,9 @@ if not args.skip_creation:
     # SPLITTING of the dataset into training an validation set
     classes_count = image_mover.split_train_test_dataset(args.dir)
 else:
+    if not os.path.exists(args.dir):
+        print("ERROR: working Folder '{}' not existing".format(args.dir))
+        quit()
     classes_count = len(next(os.walk(args.dir))[1])
 print("INFO: Found '{}' classes".format(classes_count))
 
