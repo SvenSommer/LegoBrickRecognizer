@@ -3,6 +3,7 @@ import pymysql
 import os
 from shutil import copyfile
 from pathlib import Path
+from tqdm import tqdm
 
 class ImageMover():
     def __init__(self):
@@ -45,3 +46,20 @@ class ImageMover():
         else:
             print("    File already exists: " + file_destination)
             self.images_skipped += 1
+
+    def split_train_test_dataset(self, base_folder):
+        train_folder = os.path.join(base_folder, 'partno/')
+        test_folder = os.path.join(base_folder, 'partno_val/')
+
+        for folder in tqdm(os.listdir(train_folder)):
+            res_folder = os.path.join(test_folder, folder)
+            os.makedirs(res_folder, exist_ok=True)
+            k = 0
+            for file_name in sorted(os.listdir(os.path.join(train_folder, folder))):
+                if k > 5:
+                    continue
+                k += 1
+                target_file = os.path.join(train_folder, folder, file_name)
+                save_file = os.path.join(res_folder, file_name)
+                copyfile(target_file, save_file)
+                os.remove(target_file)
