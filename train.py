@@ -44,6 +44,7 @@ if not os.path.exists(args.dir):
 # SPLITTING of the dataset into training an validation set
 classes_count = image_mover.split_train_test_dataset(args.dir)
 print("INFO: Found '{}' classes".format(classes_count))
+
 # TRAIN
 classifier = LitBrickClassifier(classes_count)
 print("INFO: Started training with {} epochs on {} gpu(s).".format(args.epochs, args.gpus_count))

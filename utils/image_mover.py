@@ -4,6 +4,7 @@ import os
 from shutil import copyfile
 from pathlib import Path
 from tqdm import tqdm
+from PIL import Image
 
 
 class ImageMover():
@@ -15,6 +16,10 @@ class ImageMover():
                                   passwd="qF2J%9a84zU",  # your password
                                   db="LegoSorterDB")  # name of the data base
         self.cur = self.db.cursor()
+
+    def is_flip(self, file_path: str) -> bool:
+        view_type = file_path.split('_')[-1].split('.')[0]
+        return view_type in ['LEFT', 'RIGHT']
 
     def move_images(self, dest_folder):
         self.cur.execute("""SELECT path, camera, p.partno, p.color_id, camera FROM LegoSorterDB.Partimages i 
@@ -41,7 +46,13 @@ class ImageMover():
 
         file_destination = os.path.join(long_dest_folder, os.path.basename(imagepath))
         if not Path(file_destination).is_file():
-            copyfile(imagepath, file_destination)
+            if self.is_flip(imagepath):
+                image = Image.open(imagepath).convert('RGB')
+                image = image.transpose(method=Image.FLIP_LEFT_RIGHT)
+                image.save(file_destination)
+                print("    Flipped image: " + file_destination)
+            else:
+                copyfile(imagepath, file_destination)
             print("    Writing file: " + file_destination)
             self.image_counter += 1
         else:
