@@ -6,7 +6,6 @@ from pathlib import Path
 from tqdm import tqdm
 from PIL import Image
 
-
 class ImageMover():
     def __init__(self):
         self.image_counter = 0
@@ -26,7 +25,10 @@ class ImageMover():
         LEFT JOIN LegoSorterDB.Identifiedparts p ON p.id = i.part_id
         WHERE i.deleted IS NULL AND p.deleted IS NULL""")
 
-        for row in self.cur.fetchall():
+        sqlresult = self.cur.fetchall()
+        print("INFO: Moving {} labeled images to new training_folder {}".format(len(sqlresult), dest_folder))
+
+        for row in self.progressBar(sqlresult):
             path = os.path.join('/home/robert/LegoImageCropper/', row[0])
             camera = row[1]
             partno = row[2]
@@ -35,13 +37,14 @@ class ImageMover():
             self.copy_image(path, os.path.join(dest_folder, 'partno'), str(partno))
             self.copy_image(path, os.path.join(dest_folder, 'color_id', camera), str(color_id))
 
-        print("Wrote " + str(self.image_counter) + " image files. Skipped " + str(self.images_skipped) + " Files")
+
+        print("INFO: Wrote " + str(self.image_counter) + " image files. Skipped " + str(self.images_skipped) + " Files")
 
     def copy_image(self, imagepath, dest_folder, label):
 
         long_dest_folder = os.path.join(dest_folder, label)
         if not os.path.exists(long_dest_folder):
-            print("    Creating partdestfolder: " + long_dest_folder)
+            # print("    Creating partdestfolder: " + long_dest_folder)
             os.makedirs(long_dest_folder)
 
         file_destination = os.path.join(long_dest_folder, os.path.basename(imagepath))
@@ -50,13 +53,13 @@ class ImageMover():
                 image = Image.open(imagepath).convert('RGB')
                 image = image.transpose(method=Image.FLIP_LEFT_RIGHT)
                 image.save(file_destination)
-                print("    Flipped image: " + file_destination)
+                # print("    Flipped image: " + file_destination)
             else:
                 copyfile(imagepath, file_destination)
-            print("    Writing file: " + file_destination)
+            # print("    Writing file: " + file_destination)
             self.image_counter += 1
         else:
-            print("    File already exists: " + file_destination)
+            # print("    File already exists: " + file_destination)
             self.images_skipped += 1
 
     def split_train_test_dataset(self, base_folder):
@@ -78,3 +81,33 @@ class ImageMover():
                 copyfile(target_file, save_file)
                 os.remove(target_file)
         return classes_count
+
+    def progressBar(self, iterable, prefix='Progress', suffix='Moved', decimals=1, length=50, fill='█', printEnd="\r"):
+        """
+        Call in a loop to create terminal progress bar
+        @params:
+            iterable    - Required  : iterable object (Iterable)
+            prefix      - Optional  : prefix string (Str)
+            suffix      - Optional  : suffix string (Str)
+            decimals    - Optional  : positive number of decimals in percent complete (Int)
+            length      - Optional  : character length of bar (Int)
+            fill        - Optional  : bar fill character (Str)
+            printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+        """
+        total = len(iterable)
+
+        # Progress Bar Printing Function
+        def printProgressBar(iteration):
+            percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+            filledLength = int(length * iteration // total)
+            bar = fill * filledLength + '-' * (length - filledLength)
+            print(f'\r{prefix} |{bar}| {percent}% {suffix}', end=printEnd)
+
+        # Initial Call
+        printProgressBar(0)
+        # Update Progress Bar
+        for i, item in enumerate(iterable):
+            yield item
+            printProgressBar(i + 1)
+        # Print New Line on Complete
+        print()
