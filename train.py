@@ -29,6 +29,7 @@ if not args.skip_creation:
 if not os.path.exists(args.dir):
     print("ERROR: working Folder '{}' not existing".format(args.dir))
     quit()
-    
+
+# SPLITTING of the dataset into training an validation images
 image_mover.split_train_test_dataset(args.dir)
 
