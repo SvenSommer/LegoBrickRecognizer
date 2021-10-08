@@ -31,7 +31,7 @@ def parse_args() -> Namespace:
 
 args = parse_args()
 image_mover = ImageMover()
-classifier = LitBrickClassifier()
+
 
 # CREATION of images to train on: Gets the labeled files from the database and moves them into the destination_folder
 if not args.skip_creation:
@@ -42,7 +42,9 @@ if not os.path.exists(args.dir):
     quit()
 
 # SPLITTING of the dataset into training an validation set
-image_mover.split_train_test_dataset(args.dir)
-
+classes_count = image_mover.split_train_test_dataset(args.dir)
+print("INFO: Found '{}' classes".format(classes_count))
 # TRAIN
+classifier = LitBrickClassifier(classes_count)
+print("INFO: Started training with {} epochs on {} gpu(s).".format(args.epochs, args.gpus_count))
 classifier.train(args.dir, args.epochs, args.gpus_count)

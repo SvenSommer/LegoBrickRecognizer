@@ -6,7 +6,7 @@ import os
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
-from dataloader import BricksDataloader
+from .dataloader import BricksDataloader
 
 
 class LitBrickDataModule(pl.LightningDataModule):
