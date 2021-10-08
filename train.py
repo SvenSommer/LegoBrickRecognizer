@@ -47,4 +47,4 @@ print("INFO: Found '{}' classes".format(classes_count))
 # TRAIN
 classifier = LitBrickClassifier(classes_count)
 print("INFO: Started training with {} epochs on {} gpu(s).".format(args.epochs, args.gpus_count))
-classifier.train(args.dir, args.epochs, args.gpus_count)
+classifier.trainLitBrickClassifier(args.dir, args.epochs, args.gpus_count)

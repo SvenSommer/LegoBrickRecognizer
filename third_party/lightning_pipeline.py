@@ -80,7 +80,8 @@ class LitBrickClassifier(pl.LightningModule):
             },
         }
 
-    def train(self, base_folder, epochs, gpus_count):
+    def trainLitBrickClassifier(self, base_folder, epochs, gpus_count):
+
         train_dataset_path = os.path.join(base_folder, 'partno/')
         val_dataset_path = os.path.join(base_folder, 'partno_val/')
         test_dataset_path = ''
