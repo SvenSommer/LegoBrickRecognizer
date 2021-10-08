@@ -7,7 +7,6 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from dataloader import BricksDataloader
-from optimizers import RangerAdam as RAdam
 
 
 class LitBrickDataModule(pl.LightningDataModule):
@@ -81,73 +80,69 @@ class LitBrickClassifier(pl.LightningModule):
             },
         }
 
+    def train(self, base_folder, epochs, gpus_count):
+        train_dataset_path = os.path.join(base_folder, 'partno/')
+        val_dataset_path = os.path.join(base_folder, 'partno_val/')
+        test_dataset_path = ''
+        experiments_folder = os.path.join(base_folder, 'experiments/')
+        batch_size = 32
 
-if __name__ == '__main__':
-    base_folder = '/home/robert/LegoImageCropper/output/training_data/trainingexport_20211006_093214'
-    train_dataset_path = os.path.join(base_folder, 'partno/')
-    val_dataset_path = os.path.join(base_folder, 'partno_val/')
-    test_dataset_path = ''
-    experiments_folder = os.path.join(base_folder, 'experiments/')
-    batch_size = 32
-    epochs = 200
-    gpus_count = 1
+        os.makedirs(experiments_folder, exist_ok=True)
 
-    os.makedirs(experiments_folder, exist_ok=True)
+        train_dataset = BricksDataloader(
+            train_dataset_path,
+            (224, 224),
+            True,
+            os.path.join(experiments_folder, 'train_data.csv'),
+            os.path.join(experiments_folder, 'classes.txt')
+        )
+        val_dataset = BricksDataloader(
+            val_dataset_path,
+            (224, 224),
+            False,
+            os.path.join(experiments_folder, 'val_data.csv'),
+            os.path.join(experiments_folder, 'classes.txt')
+        )
+        train_dataset.updated_classes(val_dataset)
 
-    train_dataset = BricksDataloader(
-        train_dataset_path,
-        (224, 224),
-        True,
-        os.path.join(experiments_folder, 'train_data.csv'),
-        os.path.join(experiments_folder, 'classes.txt')
-    )
-    val_dataset = BricksDataloader(
-        val_dataset_path,
-        (224, 224),
-        False,
-        os.path.join(experiments_folder, 'val_data.csv'),
-        os.path.join(experiments_folder, 'classes.txt')
-    )
-    train_dataset.updated_classes(val_dataset)
+        print('Train dataset size: {}'.format(len(train_dataset)))
+        print('Validation dataset size: {}'.format(len(val_dataset)))
+        print('Classes count: {}'.format(train_dataset.num_classes))
 
-    print('Train dataset size: {}'.format(len(train_dataset)))
-    print('Validation dataset size: {}'.format(len(val_dataset)))
-    print('Classes count: {}'.format(train_dataset.num_classes))
+        pl_model = LitBrickClassifier(
+            train_dataset.num_classes
+        )
+        pl_dataloader = LitBrickDataModule(train_dataset, val_dataset)
+        tensorboard_logger = TensorBoardLogger(
+            save_dir=os.path.join(experiments_folder, 'logs/'),
+            name='LegoBrickClassification'
+        )
+        checkpoint_callback = ModelCheckpoint(
+            monitor="val_loss",
+            dirpath=os.path.join(experiments_folder, 'checkpoints/'),
+            filename="resnet50-{epoch:03d}-{val_loss:.2f}-{version:03d}.pt",
+            save_top_k=3,
+            mode="min",
+        )
 
-    pl_model = LitBrickClassifier(
-        train_dataset.num_classes
-    )
-    pl_dataloader = LitBrickDataModule(train_dataset, val_dataset)
-    tensorboard_logger = TensorBoardLogger(
-        save_dir=os.path.join(experiments_folder, 'logs/'),
-        name='LegoBrickClassification'
-    )
-    checkpoint_callback = ModelCheckpoint(
-        monitor="val_loss",
-        dirpath=os.path.join(experiments_folder, 'checkpoints/'),
-        filename="resnet50-{epoch:03d}-{val_loss:.2f}-{version:03d}.pt",
-        save_top_k=3,
-        mode="min",
-    )
+        trainer = pl.Trainer(
+            default_root_dir=experiments_folder,
+            logger=tensorboard_logger,
+            callbacks=[checkpoint_callback],
+            accelerator='ddp',
+            max_epochs=epochs,
+            gpus=gpus_count
+        )
+        trainer.fit(pl_model, pl_dataloader)
 
-    trainer = pl.Trainer(
-        default_root_dir=experiments_folder,
-        logger=tensorboard_logger,
-        callbacks=[checkpoint_callback],
-        accelerator='ddp',
-        max_epochs=epochs,
-        gpus=gpus_count
-    )
-    trainer.fit(pl_model, pl_dataloader)
-
-    # ch = '/home/robert/LegoImageCropper/output/training_data/trainingexport_/20211004_200630/experiments/checkpoints/resnet50-epoch=006-val_loss=5.84.pt.ckpt'
-    pl_model.load_from_checkpoint(
-        checkpoint_callback.best_model_path,
-        #  ch,
-        classes_count=train_dataset.num_classes
-    )
-    pl_model.eval()
-    torch.jit.save(
-        pl_model.to_torchscript(),
-        os.path.join(experiments_folder, 'traced_best_model.pt')
-    )
+        # ch = '/home/robert/LegoImageCropper/output/training_data/trainingexport_/20211004_200630/experiments/checkpoints/resnet50-epoch=006-val_loss=5.84.pt.ckpt'
+        pl_model.load_from_checkpoint(
+            checkpoint_callback.best_model_path,
+            #  ch,
+            classes_count=train_dataset.num_classes
+        )
+        pl_model.eval()
+        torch.jit.save(
+            pl_model.to_torchscript(),
+            os.path.join(experiments_folder, 'traced_best_model.pt')
+        )

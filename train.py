@@ -3,6 +3,7 @@ import time
 import os
 from argparse import ArgumentParser, Namespace
 from utils.image_mover import ImageMover
+from third_party.lightning_pipeline import LitBrickClassifier
 
 
 def parse_args() -> Namespace:
@@ -16,11 +17,25 @@ def parse_args() -> Namespace:
         '--skip-creation', action='store_true',
         help='Skips the first step of creating a new directory with labeled data'
     )
+    parser.add_argument(
+        '--epochs', type=int, required=False, default=200,
+        help='Epochs count for training'
+    )
+    parser.add_argument(
+        '--epochs', type=int, required=False, default=200,
+        help='Epochs count for training'
+    )
+    parser.add_argument(
+        '--gpus_count', type=int, required=False, default=1,
+        help='GPU used for training'
+    )
+
     return parser.parse_args()
 
 
 args = parse_args()
 image_mover = ImageMover()
+classifier = LitBrickClassifier()
 
 # CREATION of images to train on: Gets the labeled files from the database and moves them into the destination_folder
 if not args.skip_creation:
@@ -33,3 +48,5 @@ if not os.path.exists(args.dir):
 # SPLITTING of the dataset into training an validation images
 image_mover.split_train_test_dataset(args.dir)
 
+# TRAIN
+classifier.train(args.dir, args.epochs, args.gpus_count)
