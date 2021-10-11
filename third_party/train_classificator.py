@@ -40,7 +40,7 @@ class CustomTrainingPipeline(object):
         self.device = device
         self.train_dataset_path = train_data_path
         self.val_dataset_path = val_data_path
-        self.experiments_folder = args.experiment_folder
+        self.experiment_folder = args.experiment_folder
         self.checkpoints_dir = os.path.join(experiment_folder, 'checkpoints/')
 
         self.load_path = args.pretrain_weights
@@ -205,6 +205,10 @@ class CustomTrainingPipeline(object):
                 }
             )
 
+    def _save_best_traced_model(self, save_path: str):
+        traced_model = torch.jit.trace(self.model, torch.rand(1, 3, 224, 224))
+        torch.jit.save(traced_model, save_path)
+
     def _save_best_checkpoint(self, epoch, avg_acc_rate):
         model_save_path = os.path.join(
             self.checkpoints_dir,
@@ -212,14 +216,18 @@ class CustomTrainingPipeline(object):
         )
         best_model_path = os.path.join(
             self.checkpoints_dir,
-            'best.trh'.format(epoch, avg_acc_rate)
+            'best.trh'
+        )
+        best_traced_model_path = os.path.join(
+            self.experiment_folder,
+            'traced_best_model.pt'
         )
 
         if self.best_test_score - avg_acc_rate < -1E-5:
-            self.model.eval()
             self.best_test_score = avg_acc_rate
 
             self.model = self.model.to('cpu')
+            self.model.eval()
             torch.save(
                 self.model.state_dict(),
                 model_save_path
@@ -228,6 +236,7 @@ class CustomTrainingPipeline(object):
                 self.model.state_dict(),
                 best_model_path
             )
+            self._save_best_traced_model(best_traced_model_path)
             self.model = self.model.to(self.device)
 
     def check_stop_criteria(self):
