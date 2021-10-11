@@ -18,8 +18,9 @@ class ImageMover:
         return view_type in ['LEFT', 'RIGHT']
 
     def move_images(self, dest_folder):
-        self.cur.execute("""SELECT path, camera, p.partno, p.color_id, camera FROM LegoSorterDB.Partimages i 
+        self.cur.execute("""SELECT path, camera, p.partno, p.color_id, c.color_type FROM LegoSorterDB.Partimages i 
         LEFT JOIN LegoSorterDB.Identifiedparts p ON p.id = i.part_id
+        LEFT JOIN LegoSorterDB.Colors c ON p.color_id = c.color_id
         WHERE i.deleted IS NULL AND p.deleted IS NULL""")
 
         sqlresult = self.cur.fetchall()
@@ -30,9 +31,11 @@ class ImageMover:
             camera = row[1]
             partno = row[2]
             color_id = row[3]
+            color_type = row[4]
 
             self.copy_image(path, os.path.join(dest_folder, 'partno'), str(partno))
             self.copy_image(path, os.path.join(dest_folder, 'color_id', camera), str(color_id))
+            self.copy_image(path, os.path.join(dest_folder, 'color_type', camera, str(color_type)), str(color_id))
 
         print("INFO: Wrote " + str(self.image_counter) + " image files. Skipped " + str(self.images_skipped) + " Files")
 
