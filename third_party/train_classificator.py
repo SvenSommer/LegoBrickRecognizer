@@ -41,7 +41,7 @@ class CustomTrainingPipeline(object):
         self.train_dataset_path = train_data_path
         self.val_dataset_path = val_data_path
         self.experiments_folder = args.experiment_folder
-        self.checkpoints_dir = os.path.join(experiments_folder, 'checkpoints/')
+        self.checkpoints_dir = os.path.join(experiment_folder, 'checkpoints/')
 
         self.load_path = args.pretrain_weights
         self.visdom_port = args.visdom_port  # Set None to disable
