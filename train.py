@@ -86,3 +86,4 @@ classifier = CustomTrainingPipeline(
     experiment_folder=os.path.join(args.dir, 'experiments/'),
     stop_criteria=1E-5
 )
+classifier.fit()
