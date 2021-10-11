@@ -6,15 +6,12 @@ from pathlib import Path
 from tqdm import tqdm
 from PIL import Image
 
-class ImageMover():
-    def __init__(self):
+
+class ImageMover:
+    def __init__(self, cursor):
         self.image_counter = 0
         self.images_skipped = 0
-        self.db = pymysql.connect(host="mysqlserver",  # your host, usually localhost
-                                  user="WebDBUser",  # your username
-                                  passwd="qF2J%9a84zU",  # your password
-                                  db="LegoSorterDB")  # name of the data base
-        self.cur = self.db.cursor()
+        self.cur = cursor
 
     def is_flip(self, file_path: str) -> bool:
         view_type = file_path.split('_')[-1].split('.')[0]
@@ -36,7 +33,6 @@ class ImageMover():
 
             self.copy_image(path, os.path.join(dest_folder, 'partno'), str(partno))
             self.copy_image(path, os.path.join(dest_folder, 'color_id', camera), str(color_id))
-
 
         print("INFO: Wrote " + str(self.image_counter) + " image files. Skipped " + str(self.images_skipped) + " Files")
 

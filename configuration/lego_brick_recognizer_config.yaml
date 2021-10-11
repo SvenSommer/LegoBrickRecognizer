@@ -1,0 +1,14 @@
+DATABASE_DEBUG:
+    host: "localhost"
+    user: "root"
+    passwd: "1234"
+    db: "LegoSorterDB"
+    port: 3306
+
+DATABASE_PROD:
+    host: "mysqlserver"
+    user: "WebDBUser"
+    passwd: "qF2J%9a84zU"
+    db: "LegoSorterDB"
+    port: 3306
+

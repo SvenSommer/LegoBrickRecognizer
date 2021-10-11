@@ -3,7 +3,10 @@ import time
 import os
 from argparse import ArgumentParser, Namespace
 from utils.image_mover import ImageMover
+from utils.database_connector import DatabaseConnector
+from utils.color_info import ColorInfo, Color
 from third_party.lightning_pipeline import LitBrickClassifier
+import yaml
 
 
 def parse_args() -> Namespace:
@@ -25,13 +28,36 @@ def parse_args() -> Namespace:
         '--gpus_count', type=int, required=False, default=1,
         help='GPU used for training'
     )
+    parser.add_argument(
+        '--config', type=str, default='configuration/lego_brick_recognizer_config.yaml',
+        required=False, help='Path to configuration file.'
+    )
+    parser.add_argument(
+        '--prod', action='store_true',
+        help='Sets queries to production Database'
+    )
 
     return parser.parse_args()
 
 
 args = parse_args()
-image_mover = ImageMover()
+with open(args.config, 'r') as conf_f:
+    config_dict = yaml.safe_load(conf_f)
 
+# Connect to Database
+if args.prod:
+    db_connector = DatabaseConnector(config_dict['DATABASE_DEBUG'])
+else:
+    db_connector = DatabaseConnector(config_dict['DATABASE_PROD'])
+
+# Color Request
+colorinfo = ColorInfo(db_connector.get_cursor())
+colors = colorinfo.get_colors()
+for color in colors:
+    print(color)
+
+# Initialize Utils to copy images
+image_mover = ImageMover(db_connector.get_cursor())
 
 # CREATION of images to train on: Gets the labeled files from the database and moves them into the destination_folder
 if not args.skip_creation:
