@@ -6,9 +6,9 @@ from torch.utils import data
 import torchvision
 import os
 
-from dataloader import BricksDataloader
-from callbacks import VisImagesGrid, VisPlot
-from optimizers import RangerAdam as RAdam
+from third_party.dataloader import BricksDataloader
+from third_party.callbacks import VisImagesGrid, VisPlot
+from third_party.optimizers import RangerAdam as RAdam
 
 
 class CustomTrainingPipeline(object):
@@ -51,7 +51,7 @@ class CustomTrainingPipeline(object):
         self.best_test_score = 0
 
         os.makedirs(experiment_folder, exist_ok=True)
-        os.makedirs(experiment_folder, exist_ok=True)
+        os.makedirs(self.checkpoints_dir, exist_ok=True)
 
         self.train_dataset = BricksDataloader(
             train_data_path,
@@ -87,9 +87,9 @@ class CustomTrainingPipeline(object):
         self.batch_visualizer = None if visdom_port is None else VisImagesGrid(
             title='Bricks',
             port=visdom_port,
-            vis_step=100,
-            scale=2,
-            grid_size=4
+            vis_step=250,
+            scale=1,
+            grid_size=8
         )
 
         self.plot_visualizer = None if visdom_port is None else VisPlot(
@@ -105,7 +105,7 @@ class CustomTrainingPipeline(object):
             )
 
             self.plot_visualizer.register_scatterplot(
-                name='per_epoch acc',
+                name='validation acc per_epoch',
                 xlabel='Epoch',
                 ylabel='Accuracy'
             )
@@ -203,7 +203,7 @@ class CustomTrainingPipeline(object):
                     'n': epoch,
                     'val loss': avg_val_loss,
                     'loss': avg_train_loss,
-                    'acc': avg_val_acc
+                    'val acc': avg_val_acc
                 }
             )
 
@@ -218,6 +218,7 @@ class CustomTrainingPipeline(object):
         )
 
         if self.best_test_score - avg_acc_rate < -1E-5:
+            self.model.eval()
             self.best_test_score = avg_acc_rate
 
             self.model = self.model.to('cpu')
