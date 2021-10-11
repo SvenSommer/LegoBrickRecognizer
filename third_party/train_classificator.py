@@ -213,7 +213,7 @@ class CustomTrainingPipeline(object):
     def _save_best_checkpoint(self, epoch, avg_acc_rate):
         model_save_path = os.path.join(
             self.checkpoints_dir,
-            'resnet_epoch_{}_loss_{:.2f}.trh'.format(epoch, avg_acc_rate)
+            'resnet_epoch_{}_acc_{:.2f}.trh'.format(epoch, avg_acc_rate)
         )
         best_model_path = os.path.join(
             self.checkpoints_dir,
