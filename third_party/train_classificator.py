@@ -153,9 +153,7 @@ class CustomTrainingPipeline(object):
                         loss.item() / self.train_dataloader.batch_size
                     )
                 avg_epoch_loss += \
-                    loss.item() / self.train_dataloader.batch_size / len(
-                        self.train_dataloader
-                    )
+                    loss.item() / len(self.train_dataloader)
 
                 if self.batch_visualizer is not None:
                     self.batch_visualizer.per_batch(
