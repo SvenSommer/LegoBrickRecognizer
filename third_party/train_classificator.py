@@ -40,12 +40,12 @@ class CustomTrainingPipeline(object):
         self.device = device
         self.train_dataset_path = train_data_path
         self.val_dataset_path = val_data_path
-        self.experiment_folder = args.experiment_folder
+        self.experiment_folder = experiment_folder
         self.checkpoints_dir = os.path.join(experiment_folder, 'checkpoints/')
 
-        self.load_path = args.pretrain_weights
-        self.visdom_port = args.visdom_port  # Set None to disable
-        self.batch_size = args.batch_size
+        self.load_path = load_path
+        self.visdom_port = visdom_port  # Set None to disable
+        self.batch_size = batch_size
         self.epochs = epochs
         self.stop_criteria = stop_criteria
         self.best_test_score = 0
@@ -72,7 +72,8 @@ class CustomTrainingPipeline(object):
         self.train_dataloader = torch.utils.data.DataLoader(
             dataset=self.train_dataset,
             batch_size=batch_size,
-            shuffle=True,
+            shuffle=False,
+            sampler=self.train_dataset.get_classes_sampler(),
             drop_last=True,
             num_workers=4
         )
