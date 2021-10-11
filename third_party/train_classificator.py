@@ -21,7 +21,7 @@ class CustomTrainingPipeline(object):
                  visdom_port: int = 9000,
                  batch_size: int = 32,
                  epochs: int = 200,
-                 stop_criteria: int = 1E-7,
+                 stop_criteria: float = 1E-7,
                  device: str = 'cuda'):
         """
         Train model

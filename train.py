@@ -5,7 +5,7 @@ from argparse import ArgumentParser, Namespace
 from utils.image_mover import ImageMover
 from utils.database_connector import DatabaseConnector
 from utils.color_info import ColorInfo, Color
-from third_party.lightning_pipeline import LitBrickClassifier
+from third_party.train_classificator import CustomTrainingPipeline
 import yaml
 
 
@@ -76,6 +76,13 @@ else:
 print("INFO: Found '{}' classes".format(classes_count))
 
 # TRAIN
-classifier = LitBrickClassifier(classes_count)
+# classifier = LitBrickClassifier(classes_count)
 print("INFO: Started training with {} epochs on {} gpu(s).".format(args.epochs, args.gpus_count))
-classifier.trainLitBrickClassifier(args.dir, args.epochs, args.gpus_count)
+# classifier.trainLitBrickClassifier(args.dir, args.epochs, args.gpus_count)
+
+classifier = CustomTrainingPipeline(
+    train_data_path=os.path.join(args.dir, 'partno/'),
+    val_data_path=os.path.join(args.dir, 'partno_val/'),
+    experiment_folder=os.path.join(args.dir, 'experiments/'),
+    stop_criteria=1E-5
+)
