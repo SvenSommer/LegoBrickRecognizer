@@ -12,9 +12,9 @@ class DatabaseConnector:
                                               port=configfile['port'])
         except Exception as e:
             print(
-                "Database not initialised? Run 'docker run --cap-add=sys_nice -d -p 3306:3306 mysql-server' in the databasefolder of LegImageCropper-Repo")
+                "Database not initialised? Run 'docker run --cap-add=sys_nice -d -p 3306:3306 mysql-server' in the "
+                "'database'-folder of LegoImageCropper-Repo")
             raise
 
     def get_cursor(self):
-        print("Return Cursor")
         return self.connection.cursor()
