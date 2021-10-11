@@ -46,26 +46,26 @@ class CustomTrainingPipeline(object):
         self.load_path = args.pretrain_weights
         self.visdom_port = args.visdom_port  # Set None to disable
         self.batch_size = args.batch_size
-        self.epochs = args.epochs
+        self.epochs = epochs
         self.stop_criteria = stop_criteria
         self.best_test_score = 0
 
-        os.makedirs(experiments_folder, exist_ok=True)
-        os.makedirs(checkpoints_dir, exist_ok=True)
+        os.makedirs(experiment_folder, exist_ok=True)
+        os.makedirs(experiment_folder, exist_ok=True)
 
         self.train_dataset = BricksDataloader(
             train_data_path,
             (224, 224),
             True,
-            os.path.join(experiments_folder, 'train_data.csv'),
-            os.path.join(experiments_folder, 'classes.txt')
+            os.path.join(experiment_folder, 'train_data.csv'),
+            os.path.join(experiment_folder, 'classes.txt')
         )
         self.val_dataset = BricksDataloader(
             val_data_path,
             (224, 224),
             False,
-            os.path.join(experiments_folder, 'val_data.csv'),
-            os.path.join(experiments_folder, 'classes.txt')
+            os.path.join(experiment_folder, 'val_data.csv'),
+            os.path.join(experiment_folder, 'classes.txt')
         )
         self.train_dataset.updated_classes(self.train_dataset)
 
