@@ -8,11 +8,6 @@ from tqdm import tqdm
 import pandas as pd
 
 
-def is_flip(file_path: str) -> bool:
-    view_type = file_path.split('_')[-1].split('.')[0]
-    return view_type in ['LEFT', 'RIGHT']
-
-
 class BricksDataloader(torch.utils.data.Dataset):
     def __init__(self,
                  root_path: str, shape: tuple,
@@ -128,8 +123,5 @@ class BricksDataloader(torch.utils.data.Dataset):
         img_path = self.images_dataframe.loc[idx, 'img_path']
         brick_class = self.images_dataframe.loc[idx, 'brick_class']
         image = Image.open(img_path)
-
-        if is_flip(img_path):
-            image = image.transpose(method=Image.FLIP_LEFT_RIGHT)
 
         return self.apply_augmentations(image), brick_class
