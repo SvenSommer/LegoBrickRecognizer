@@ -21,7 +21,8 @@ class ImageMover:
         self.cur.execute("""SELECT path, camera, p.partno, p.color_id, c.color_type FROM LegoSorterDB.Partimages i 
         LEFT JOIN LegoSorterDB.Identifiedparts p ON p.id = i.part_id
         LEFT JOIN LegoSorterDB.Colors c ON p.color_id = c.color_id
-        WHERE i.deleted IS NULL AND p.deleted IS NULL""")
+        WHERE i.deleted IS NULL AND p.deleted IS NULL
+        and color_type IN ('Solid','Transparent','Pearl','Metallic')""")
 
         sqlresult = self.cur.fetchall()
         print("INFO: Moving {} labeled images to new training_folder {}".format(len(sqlresult), dest_folder))
@@ -35,7 +36,7 @@ class ImageMover:
 
             self.copy_image(path, os.path.join(dest_folder, 'partno'), str(partno))
             self.copy_image(path, os.path.join(dest_folder, 'color_id', camera), str(color_id))
-            self.copy_image(path, os.path.join(dest_folder, 'color_type', camera, str(color_type)), str(color_id))
+            self.copy_image(path, os.path.join(dest_folder, 'color_type',  str(color_type)), str(color_id))
 
         print("INFO: Wrote " + str(self.image_counter) + " image files. Skipped " + str(self.images_skipped) + " Files")
 
