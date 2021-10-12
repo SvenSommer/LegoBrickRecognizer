@@ -1,0 +1,4 @@
+Metallic
+Pearl
+Solid
+Transparent

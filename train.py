@@ -6,6 +6,7 @@ from utils.image_mover import ImageMover
 from utils.database_connector import DatabaseConnector
 from utils.color_info import ColorInfo, Color
 from third_party.train_classificator import CustomTrainingPipeline
+from data_operations.split_classification_dataset_to_train_val_folders import DataSetSplitter
 import yaml
 
 
@@ -41,6 +42,10 @@ def parse_args() -> Namespace:
 
 
 args = parse_args()
+train_folder = os.path.join(args.dir, 'partno/')
+validation_folder = os.path.join(args.dir, 'partno_val/')
+experiment_folder = os.path.join(args.dir, 'experiments/')
+
 with open(args.config, 'r') as conf_f:
     config_dict = yaml.safe_load(conf_f)
 
@@ -67,23 +72,21 @@ if not args.skip_creation:
         quit()
     print("INFO: Splitting images in training and validation set")
     # SPLITTING of the dataset into training an validation set
-    classes_count = image_mover.split_train_test_dataset(args.dir)
-else:
-    if not os.path.exists(args.dir):
-        print("ERROR: working Folder '{}' not existing".format(args.dir))
-        quit()
-    classes_count = len(next(os.walk(args.dir))[1])
+
+    splitter = DataSetSplitter(train_folder, validation_folder, 0.2)
+    splitter.split()
+
+if not os.path.exists(args.dir):
+    print("ERROR: working Folder '{}' not existing".format(args.dir))
+    quit()
+classes_count = len(next(os.walk(args.dir))[1])
 print("INFO: Found '{}' classes".format(classes_count))
-
 # TRAIN
-# classifier = LitBrickClassifier(classes_count)
 print("INFO: Started training with {} epochs on {} gpu(s).".format(args.epochs, args.gpus_count))
-# classifier.trainLitBrickClassifier(args.dir, args.epochs, args.gpus_count)
-
 classifier = CustomTrainingPipeline(
-    train_data_path=os.path.join(args.dir, 'partno/'),
-    val_data_path=os.path.join(args.dir, 'partno_val/'),
-    experiment_folder=os.path.join(args.dir, 'experiments/'),
+    train_data_path=train_folder,
+    val_data_path=validation_folder,
+    experiment_folder=experiment_folder,
     stop_criteria=1E-5
 )
 classifier.fit()

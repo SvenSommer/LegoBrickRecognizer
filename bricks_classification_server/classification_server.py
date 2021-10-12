@@ -326,8 +326,8 @@ def solvetasks():
             print("task " + str(task_id) + " had no image at the source available - was skipped.")
         else:
 
-            cls_num, conf = brick_classificator(img)
-            color_id, color_type = brick_color_estimator(img)
+            cls_num, conf = brick_classificator(image)
+            color_id, color_type = brick_color_estimator(image)
 
             # Store the result
             s.put(serverurl + "/partimages/{image_id}",
