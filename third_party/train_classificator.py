@@ -29,6 +29,7 @@ class CustomTrainingPipeline(object):
             train_data_path: Path to training data
             val_data_path: Path to testing data
             experiment_folder: Path to folder with checkpoints and experiments data
+            model: PyTorch classification model
             load_path: Path to model weights to load
             visdom_port: Port of visualization
             batch_size: Training batch size
@@ -111,8 +112,7 @@ class CustomTrainingPipeline(object):
                 ylabel='Accuracy'
             )
 
-        self.model.fc = torch.nn.Linear(
-            self.model.fc.in_features, self.train_dataset.num_classes)
+        self._change_last_model_layer(self.train_dataset.num_classes)
 
         if load_path is not None:
             self.model.load_state_dict(
@@ -131,6 +131,41 @@ class CustomTrainingPipeline(object):
     def get_lr(self):
         for param_group in self.optimizer.param_groups:
             return param_group['lr']
+
+    def _change_last_model_layer(self, num_classes):
+        fc_layer_name = list(self.model.state_dict().keys())[-1].split('.')[0]
+
+        fc_layer_name_element = getattr(
+            self.model,
+            fc_layer_name
+        )
+
+        if isinstance(fc_layer_name_element, torch.nn.Sequential):
+            in_fc_features_size = fc_layer_name_element[-1].in_features
+            fc_layer_name_element[-1] = torch.nn.Linear(
+                in_fc_features_size,
+                num_classes
+            )
+
+            setattr(
+                self.model,
+                fc_layer_name,
+                fc_layer_name_element
+            )
+        elif isinstance(fc_layer_name_element, torch.nn.Module):
+            in_fc_features_size = fc_layer_name_element.in_features
+
+            setattr(
+                self.model,
+                fc_layer_name,
+                torch.nn.Linear(
+                    in_fc_features_size,
+                    num_classes
+                )
+            )
+        else:
+            raise RuntimeError(
+                'Unsupported layer type: {}'.format(fc_layer_name_element))
 
     def _train_step(self, epoch) -> float:
         self.model.train()
@@ -191,7 +226,7 @@ class CustomTrainingPipeline(object):
             avg_acc_rate /= test_len
             avg_loss_rate /= test_len
 
-        self.scheduler.step(1.0 - avg_acc_rate)
+        self.scheduler.step(avg_loss_rate)
 
         return avg_loss_rate, avg_acc_rate
 
@@ -213,7 +248,7 @@ class CustomTrainingPipeline(object):
     def _save_best_checkpoint(self, epoch, avg_acc_rate):
         model_save_path = os.path.join(
             self.checkpoints_dir,
-            'resnet_epoch_{}_loss_{:.2f}.trh'.format(epoch, avg_acc_rate)
+            'resnet_epoch_{}_acc_{:.2f}.trh'.format(epoch, avg_acc_rate)
         )
         best_model_path = os.path.join(
             self.checkpoints_dir,
@@ -240,7 +275,7 @@ class CustomTrainingPipeline(object):
             self._save_best_traced_model(best_traced_model_path)
             self.model = self.model.to(self.device)
 
-    def check_stop_criteria(self):
+    def _check_stop_criteria(self):
         return self.get_lr() - self.stop_criteria < -1E-9
 
     def fit(self):
@@ -250,7 +285,7 @@ class CustomTrainingPipeline(object):
             self._plot_values(epoch_num, epoch_train_loss, val_loss, val_acc)
             self._save_best_checkpoint(epoch_num, val_acc)
 
-            if self.check_stop_criteria():
+            if self._check_stop_criteria():
                 break
 
 
@@ -296,7 +331,8 @@ if __name__ == '__main__':
         load_path=args.pretrain_weights,
         visdom_port=args.visdom_port,
         epochs=args.epochs,
-        batch_size=args.batch_size
+        batch_size=args.batch_size,
+        model=torchvision.models.mobilenet_v2(False)
     ).fit()
 
     exit(0)
