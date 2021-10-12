@@ -228,12 +228,6 @@ def solution_inference(img: np.ndarray) -> dict:
         'color_type': color_type
     }
 
-
-def is_flip(file_path: str) -> bool:
-    view_type = file_path.split('_')[-1].split('.')[0]
-    return view_type in ['LEFT', 'RIGHT']
-
-
 def getImageFromUrl(image_url_str, batch=False):
     image = None
     try:
@@ -247,9 +241,6 @@ def getImageFromUrl(image_url_str, batch=False):
             abort(408)
         else:
             return None
-
-    if is_flip(image_url_str):
-        image = image.transpose(method=Image.FLIP_LEFT_RIGHT)
 
     return image
 
@@ -266,9 +257,6 @@ def getImageFromPath(image_path, batch=False):
             abort(408)
         else:
             return None
-
-    if is_flip(image_path):
-        image = image.transpose(method=Image.FLIP_LEFT_RIGHT)
 
     return image
 
