@@ -31,6 +31,7 @@ class FunctionServingWrapper(object):
     """
     Class of wrapper for restriction count of simultaneous function calls
     """
+
     def __init__(self,
                  callable_function: callable,
                  count_of_parallel_users: int = 1):
@@ -181,7 +182,7 @@ class BrickColorEstimation(object):
 
         predicted_color_id = \
             int(self.base_by_materials[type_name]['color_id'][sub_idx])
-        return predicted_color_id, type_name
+        return predicted_color_id, type_name,
 
 
 app = Flask(__name__)
@@ -227,6 +228,7 @@ def solution_inference(img: np.ndarray) -> dict:
         'color_id': color_id,
         'color_type': color_type
     }
+
 
 def getImageFromUrl(image_url_str, batch=False):
     image = None
@@ -290,16 +292,16 @@ def solvetasks():
     timer_start = time.perf_counter()
     serverurl = 'http://192.168.178.22:3001'
     # Login
-    s = requests.Session() 
+    s = requests.Session()
     payload = {"username": "brick_recognition_worker",
-    "password": "pass"}
+               "password": "pass"}
     s.post(serverurl + "/users/login", data=payload)
 
     # Get Tasks
     data_json = s.get(serverurl + "/tasks/type/5/open").json()
     tasks = data_json["result"]
-    
-    #Loop Tasks
+
+    # Loop Tasks
     task_counter = 0
 
     for t in tasks:
@@ -307,7 +309,7 @@ def solvetasks():
         information_json = json.loads(t["information"])
         if 'image_id' not in information_json.keys():
             # Mark task with error status 
-            print(s.put(serverurl + "/tasks/{task_id}/status", data={'id':task_id,'status_id':4}).text)
+            print(s.put(serverurl + "/tasks/{task_id}/status", data={'id': task_id, 'status_id': 4}).text)
         image_id = information_json["image_id"]
 
         if 'imageurl' in information_json.keys():
@@ -320,28 +322,28 @@ def solvetasks():
             abort(408)
 
         if image is None:
-             print(s.put(serverurl + "/tasks/{task_id}/status", data={'id':task_id,'status_id':4}).text)
-             print("task " + str(task_id) + " had no image at the source available - was skipped." )
+            print(s.put(serverurl + "/tasks/{task_id}/status", data={'id': task_id, 'status_id': 4}).text)
+            print("task " + str(task_id) + " had no image at the source available - was skipped.")
         else:
 
-            cls_num, conf = brick_classificator(image)
+            cls_num, conf = brick_classificator(img)
+            color_id, color_type = brick_color_estimator(img)
 
             # Store the result
-            s.put(serverurl + "/partimages/{image_id}", data={'id':image_id,'partno':cls_num, 'confidence_partno':float('{:.3f}'.format(conf))})
+            s.put(serverurl + "/partimages/{image_id}",
+                  data={'id': image_id, 'partno': cls_num, 'confidence_partno': float('{:.3f}'.format(conf)), 'color_id':color_id})
             # Mark task as completed
-            s.put(serverurl + "/tasks/{task_id}/status", data={'id':task_id,'status_id':3})
-            print("task " + str(task_id) + " completed." )
-            
+            s.put(serverurl + "/tasks/{task_id}/status", data={'id': task_id, 'status_id': 3})
+            print("task " + str(task_id) + " completed.")
+
         task_counter += 1
     timer_end = time.perf_counter()
-    return jsonify({"solvedTasks" : task_counter, "elapsedTime": f"{timer_end - timer_start:0.4f} seconds"  })
+    return jsonify({"solvedTasks": task_counter, "elapsedTime": f"{timer_end - timer_start:0.4f} seconds"})
 
 
 if __name__ == '__main__':
     args = args_parse()
     app.run(host=args.ip, debug=False, port=args.port)
-
-
 
 images = [...]
 tensors = [
