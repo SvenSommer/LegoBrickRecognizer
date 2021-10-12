@@ -13,9 +13,21 @@ class ImageMover:
         self.images_skipped = 0
         self.cur = cursor
 
-    def is_flip(self, file_path: str) -> bool:
-        view_type = file_path.split('_')[-1].split('.')[0]
-        return view_type in ['LEFT', 'RIGHT']
+    def flip_images_permanently(self):
+        self.cur.execute("""SELECT path FROM LegoSorterDB.Partimages where deleted IS NULL AND  (path like '%left%' or 
+        path like '%right%') order by id asc""")
+
+        sqlresult = self.cur.fetchall()
+        print("INFO: Flipping {} images".format(len(sqlresult)))
+        for row in self.progressBar(sqlresult):
+            path = os.path.join('/home/robert/LegoImageCropper/', row[0])
+            if os.path.exists(path):
+                image = Image.open(path).convert('RGB')
+                image = image.transpose(method=Image.FLIP_LEFT_RIGHT)
+                image.save(path)
+            else:
+                print("Image not found: ", path)
+        return
 
     def move_images(self, dest_folder):
         self.cur.execute("""SELECT path, camera, p.partno, p.color_id, c.color_type FROM LegoSorterDB.Partimages i 
@@ -49,13 +61,7 @@ class ImageMover:
 
         file_destination = os.path.join(long_dest_folder, os.path.basename(imagepath))
         if not Path(file_destination).is_file():
-            if self.is_flip(imagepath):
-                image = Image.open(imagepath).convert('RGB')
-                image = image.transpose(method=Image.FLIP_LEFT_RIGHT)
-                image.save(file_destination)
-                # print("    Flipped image: " + file_destination)
-            else:
-                copyfile(imagepath, file_destination)
+            copyfile(imagepath, file_destination)
             # print("    Writing file: " + file_destination)
             self.image_counter += 1
         else:
