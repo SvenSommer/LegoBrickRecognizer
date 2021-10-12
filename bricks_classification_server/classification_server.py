@@ -3,6 +3,9 @@ import os
 import sys
 from timeit import default_timer as time
 from argparse import ArgumentParser, Namespace
+from colormath.color_objects import sRGBColor, LabColor
+from colormath.color_conversions import convert_color
+from colormath.color_diff import delta_e_cie2000
 from flask import Flask, jsonify, abort, request
 import io
 import logging
@@ -12,7 +15,8 @@ import json
 import time
 import requests
 import os
-from PIL import Image
+import pandas as pd
+from PIL import Image, ImageColor
 from threading import Lock
 
 
@@ -78,7 +82,7 @@ class BrickClassification(object):
 
         self.transform = torchvision.transforms.Compose(
             [
-                torchvision.transforms.Resize((224, 224)),
+                torchvision.transforms.Resize(self.input_shape),
                 torchvision.transforms.ToTensor()
             ]
         )
@@ -87,10 +91,97 @@ class BrickClassification(object):
         inp_tensor = self.transform(_input_img).unsqueeze(0).to(self.device)
         return inp_tensor
 
-    def __call__(self, _img: np.ndarray) -> tuple:
+    def __call__(self, _img: Image) -> tuple:
         out = self.model(self._preprocess(_img)).detach().to('cpu')[0]
         return self.classes_names[out.argmax()], \
                float(torch.sigmoid(out).max().numpy())
+
+
+class BrickColorEstimation(object):
+    base_by_materials = dict()
+
+    def __init__(self,
+                 traced_model_file: str,
+                 colors_table_file: str,
+                 colors_types_names_file: str,
+                 device: str = 'cpu'):
+        self.color_type_model = torch.jit.load(traced_model_file)
+        self.color_type_model.eval()
+        self.color_type_model = self.color_type_model.to(device)
+        self.input_shape = (224, 224)
+        self.device = device
+        self._prepare_table(colors_table_file)
+
+        with open(colors_types_names_file, 'r') as f:
+            self.color_types_names = [line.rstrip() for line in f]
+
+        self.transform = torchvision.transforms.Compose(
+            [
+                torchvision.transforms.Resize(self.input_shape),
+                torchvision.transforms.ToTensor()
+            ]
+        )
+
+    def _prepare_table(self, table_path):
+        colors_table = pd.read_csv(table_path)
+
+        materials = list(set(list(colors_table['color_type'])))
+
+        self.base_by_materials = {
+            material_name: {'color_id': [], 'rgb': []}
+            for material_name in materials
+        }
+
+        for i in range(0, len(colors_table)):
+            hex_cl = '#' + str(colors_table.loc[i]['HEX']).replace(' ', '')
+            if hex_cl == '#0':
+                hex_cl = '#000000'
+            name = colors_table.loc[i]['ID']
+
+            rgb = np.array(ImageColor.getrgb(hex_cl))
+            if rgb.shape != (3,):
+                continue
+
+            material = list(
+                colors_table[colors_table['ID'] == name]['color_type'])[0]
+            self.base_by_materials[material]['color_id'].append(name)
+            self.base_by_materials[material]['rgb'].append(rgb)
+
+    def _preprocess(self, _input_img: Image) -> torch.Tensor:
+        inp_tensor = self.transform(_input_img).unsqueeze(0).to(self.device)
+        return inp_tensor
+
+    @staticmethod
+    def find_nearest_color_by_cielab(_base_colors, _input_vec):
+        dists = [
+            delta_e_cie2000(
+                convert_color(sRGBColor(*_input_vec), LabColor),
+                convert_color(sRGBColor(*cb), LabColor),
+            )
+            for cb in _base_colors
+        ]
+        return np.array(dists).argmin()
+
+    def __call__(self, _img: Image) -> tuple:
+        color_type_idx = self.color_type_model(
+            self._preprocess(_img)).detach().to('cpu')[0].argmax()
+        type_name = self.color_types_names[color_type_idx]
+
+        vec_img = np.array(_img.convert('RGB'))
+        xc, yc = (vec_img.shape[1] // 2, vec_img.shape[0] // 2)
+        r = 5
+
+        crop = vec_img[yc - r:yc + r, xc - r:xc + r].copy()
+        avg_rgb = crop.mean(axis=(0, 1))
+
+        sub_idx = self.find_nearest_color_by_cielab(
+            self.base_by_materials[type_name]['rgb'],
+            avg_rgb
+        )
+
+        predicted_color_id = \
+            int(self.base_by_materials[type_name]['color_id'][sub_idx])
+        return predicted_color_id, type_name
 
 
 app = Flask(__name__)
@@ -101,6 +192,14 @@ brick_classificator = FunctionServingWrapper(
     BrickClassification(
         traced_model_file='brick_classifier.torchscript.pt',
         file_names_file='names.txt',
+        device='cpu'
+    )
+)
+brick_color_estimator = FunctionServingWrapper(
+    BrickColorEstimation(
+        traced_model_file='brick_color_type.torchscript.pt',
+        colors_table_file='LegoSorterDB_Colors.csv',
+        colors_types_names_file='color_types.txt',
         device='cpu'
     )
 )
@@ -120,10 +219,13 @@ def solution_inference(img: np.ndarray) -> dict:
         abort(409)
 
     cls_num, conf = brick_classificator(img)
+    color_id, color_type = brick_color_estimator(img)
 
     return {
         'class': cls_num,
-        'confidence': float('{:.3f}'.format(conf))
+        'confidence': float('{:.3f}'.format(conf)),
+        'color_id': color_id,
+        'color_type': color_type
     }
 
 
@@ -193,6 +295,7 @@ def solution_inference_by_path():
     image = getImageFromPath(image_path_str)
 
     return jsonify(solution_inference(image))
+
 
 @app.route('/api/solvetasks', methods=['GET'])
 def solvetasks():
