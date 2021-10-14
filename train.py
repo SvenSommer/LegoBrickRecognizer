@@ -38,6 +38,11 @@ def parse_args() -> Namespace:
         help='Sets queries to production Database'
     )
 
+    parser.add_argument(
+        '--reduce-partno', action='store_true',
+        help='Reduces the partno to its base no'
+    )
+
     return parser.parse_args()
 
 
@@ -66,7 +71,8 @@ image_mover = ImageMover(db_connector.get_cursor())
 
 # CREATION of images to train on: Gets the labeled files from the database and moves them into the destination_folder
 if not args.skip_creation:
-    image_mover.move_images(args.dir)
+    print("INFO: reduce_partno is", args.reduce_partno)
+    image_mover.move_images(args.dir, args.reduce_partno)
     if not os.path.exists(args.dir):
         print("ERROR: working Folder '{}' not existing".format(args.dir))
         quit()

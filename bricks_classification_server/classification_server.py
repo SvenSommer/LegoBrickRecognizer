@@ -191,8 +191,8 @@ app_log.setLevel(logging.ERROR)
 
 brick_classificator = FunctionServingWrapper(
     BrickClassification(
-        traced_model_file='brick_classifier.torchscript.pt',
-        file_names_file='names.txt',
+        traced_model_file='traced_best_model.pt',
+        file_names_file='classes.txt',
         device='cpu'
     )
 )

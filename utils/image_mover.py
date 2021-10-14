@@ -29,7 +29,7 @@ class ImageMover:
                 print("Image not found: ", path)
         return
 
-    def move_images(self, dest_folder):
+    def move_images(self, dest_folder, reduce_partno):
         self.cur.execute("""SELECT path, camera, p.partno, p.color_id, c.color_type FROM LegoSorterDB.Partimages i 
         LEFT JOIN LegoSorterDB.Identifiedparts p ON p.id = i.part_id
         LEFT JOIN LegoSorterDB.Colors c ON p.color_id = c.color_id
@@ -46,15 +46,19 @@ class ImageMover:
             color_id = row[3]
             color_type = row[4]
 
-            self.copy_image(path, os.path.join(dest_folder, 'partno'), str(partno))
-            self.copy_image(path, os.path.join(dest_folder, 'color_id', camera), str(color_id))
-            self.copy_image(path, os.path.join(dest_folder, 'color_type',  str(color_type)), str(color_id))
+            self.copy_image(path, os.path.join(dest_folder, 'partno'), str(partno), reduce_partno)
+            self.copy_image(path, os.path.join(dest_folder, 'color_id', camera), str(color_id), False)
+            self.copy_image(path, os.path.join(dest_folder, 'color_type',  str(color_type)), str(color_id), False)
 
         print("INFO: Wrote " + str(self.image_counter) + " image files. Skipped " + str(self.images_skipped) + " Files")
 
-    def copy_image(self, imagepath, dest_folder, label):
+    def copy_image(self, imagepath, dest_folder, label, reduce_partno):
 
-        long_dest_folder = os.path.join(dest_folder, self.brick_basename_sep(label)[0])
+        if reduce_partno:
+            long_dest_folder = os.path.join(dest_folder, self.brick_basename_sep(label)[0])
+        else:
+            long_dest_folder = os.path.join(dest_folder, label)
+
         if not os.path.exists(long_dest_folder):
             # print("    Creating partdestfolder: " + long_dest_folder)
             os.makedirs(long_dest_folder)
