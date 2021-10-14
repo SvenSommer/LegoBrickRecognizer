@@ -117,7 +117,7 @@ class BrickColorEstimation(object):
 
         self._read_colorinfo_from_file(colorinfo_json_file)
         self._read_possible_colors_from_file(possible_colors_json_file)
-        self._prepare_table(self.colors)
+        self.base_by_materials = self._prepare_table(self.colors)
 
         with open(colors_types_names_file, 'r') as f:
             self.color_types_names = [line.rstrip() for line in f]
@@ -140,29 +140,37 @@ class BrickColorEstimation(object):
             self.colors = json.load(json_file)
             print('[INFO] Loaded information of {} colors  from \'{}\'.'.format(len(self.colors), file_path))
 
-    def _prepare_table(self, colors):
+    @staticmethod
+    def _prepare_table(colors, possible_colors=None):
         materials = set()
         for dic in colors:
             materials.add(dic['color_type'])
 
-        self.base_by_materials = {
+        result_array = {
             material_name: {'color_id': [], 'rgb': []}
             for material_name in materials
         }
 
         for i in range(0, len(colors)):
-            hex_cl = '#' + str(colors[i]['color_code']).replace(' ', '')
-            if hex_cl == '#0':
-                hex_cl = '#000000'
-            name = colors[i]['color_id']
+            if possible_colors is None or (colors[i]['color_id'] in possible_colors):
+                hex_cl = '#' + str(colors[i]['color_code']).replace(' ', '')
+                if hex_cl == '#0':
+                    hex_cl = '#000000'
+                color_id = colors[i]['color_id']
 
-            rgb = np.array(ImageColor.getrgb(hex_cl))
-            if rgb.shape != (3,):
-                continue
+                rgb = np.array(ImageColor.getrgb(hex_cl))
+                if rgb.shape != (3,):
+                    continue
 
-            material = colors[i]['color_type']
-            self.base_by_materials[material]['color_id'].append(name)
-            self.base_by_materials[material]['rgb'].append(rgb)
+                material = colors[i]['color_type']
+                result_array[material]['color_id'].append(color_id)
+                result_array[material]['rgb'].append(rgb)
+
+        if len(result_array) > 0:
+            return result_array
+        else:
+            print("Problem with possible_colors {}".format(possible_colors))
+            return self._prepare_table(colors)
 
     def _preprocess(self, _input_img: Image) -> torch.Tensor:
         inp_tensor = self.transform(_input_img).unsqueeze(0).to(self.device)
@@ -177,26 +185,44 @@ class BrickColorEstimation(object):
             )
             for cb in _base_colors
         ]
-        return np.array(dists).argmin()
+        return np.array(dists).argmin(), np.amin(dists)
 
-    def reduceColorsAvaible(self, partno):
+    def get_reduced_base_by_partno(self, partno):
         for x in self.possible_colors:
             if x['no'] == partno:
                 break
         else:
-            x = None
-        if x is not None:
-            print("Found colors for partno '{}': {}".format(partno, x['ids']))
+            print("No possible colors where found for {}".format(partno))
+            return self.base_by_materials
 
-        reduced_by_materials = []
-        # for i in range(0, len(self.base_by_materials)):
-        #     print(self.base_by_materials[i])
-
+        # print("Found colors for partno '{}': {}".format(partno, x['ids']))
+        return self._prepare_table(self.colors, json.loads(x['ids']))
 
     def __call__(self, _img: Image, partno: str) -> tuple:
+        reduced_base_by_materials = self.get_reduced_base_by_partno(partno)
+
         color_type_idx = self.color_type_model(
             self._preprocess(_img)).detach().to('cpu')[0].argmax()
+
         type_name = self.color_types_names[color_type_idx]
+        # TODO: Fix bug if no possible colors for a predicted color_type are available
+        # e.g. http://192.168.178.53:5000/extracted_images/34/run_id_34_id_12149_position_TOP_side_USB.jpg
+        # Dirty Workaround:
+        if len(reduced_base_by_materials[type_name]['rgb']) == 0:
+            print("color_type was {} now changing to Solid".format(type_name))
+            type_name = "Solid"
+        if len(reduced_base_by_materials[type_name]['rgb']) == 0:
+            print("color_type was {} now changing to Transparent".format(type_name))
+            type_name = "Transparent"
+        if len(reduced_base_by_materials[type_name]['rgb']) == 0:
+            print("color_type was {} now changing to Chrome".format(type_name))
+            type_name = "Chrome"
+        if len(reduced_base_by_materials[type_name]['rgb']) == 0:
+            print("color_type was {} now changing to Metallic".format(type_name))
+            type_name = "Metallic"
+        if len(reduced_base_by_materials[type_name]['rgb']) == 0:
+            print("color_type was {} now changing to Pearl".format(type_name))
+            type_name = "Pearl"
 
         vec_img = np.array(_img.convert('RGB'))
         xc, yc = (vec_img.shape[1] // 2, vec_img.shape[0] // 2)
@@ -205,16 +231,17 @@ class BrickColorEstimation(object):
         crop = vec_img[yc - r:yc + r, xc - r:xc + r].copy()
         avg_rgb = crop.mean(axis=(0, 1))
 
-        reduced_by_materials = self.reduceColorsAvaible(partno)
 
-        sub_idx = self.find_nearest_color_by_cielab(
-            self.base_by_materials[type_name]['rgb'],
+        # print("type_name: {}".format(type_name))
+        # print("reduced_base_by_materials: {}".format(reduced_base_by_materials))
+        sub_idx, dist = self.find_nearest_color_by_cielab(
+            reduced_base_by_materials[type_name]['rgb'],
             avg_rgb
         )
 
         predicted_color_id = \
-            int(self.base_by_materials[type_name]['color_id'][sub_idx])
-        return predicted_color_id, type_name,
+            int(reduced_base_by_materials[type_name]['color_id'][sub_idx])
+        return predicted_color_id, type_name, dist
 
 
 app = Flask(__name__)
@@ -252,13 +279,14 @@ def solution_inference(img: np.ndarray) -> dict:
         abort(409)
 
     partno, partno_conf = brick_classificator(img)
-    color_id, color_type = brick_color_estimator(img, partno)
+    color_id, color_type, dist = brick_color_estimator(img, partno)
 
     return {
         'partno': partno,
         'partno_confidence': float('{:.3f}'.format(partno_conf)),
         'color_id': color_id,
-        'color_type': color_type
+        'color_type': color_type,
+        'color_distance': float('{:.2f}'.format(dist))
     }
 
 
@@ -413,13 +441,13 @@ def solvetasks():
             print("task " + str(task_id) + " had no image at the source available - was skipped.")
         else:
 
-            cls_num, conf = brick_classificator(image)
-            color_id, color_type = brick_color_estimator(image)
+            partno, partno_conf = brick_classificator(image)
+            color_id, color_type, dist  = brick_color_estimator(image, partno)
 
             # Store the result
             s.put(serverurl + "/partimages/{image_id}",
-                  data={'id': image_id, 'partno': cls_num, 'confidence_partno': float('{:.3f}'.format(conf)),
-                        'color_id': color_id})
+                  data={'id': image_id, 'partno': partno, 'confidence_partno': float('{:.3f}'.format(partno_conf)),
+                        'color_id': color_id, 'color_distance': float('{:.2f}'.format(dist))})
             # Mark task as completed
             s.put(serverurl + "/tasks/{task_id}/status", data={'id': task_id, 'status_id': 3})
             print("task " + str(task_id) + " completed.")
