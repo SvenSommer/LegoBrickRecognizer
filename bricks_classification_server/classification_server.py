@@ -7,6 +7,7 @@ from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie2000
 from flask import Flask, jsonify, abort, request
+from utils.database_connector import DatabaseConnector
 import io
 import logging
 import torch
@@ -18,6 +19,7 @@ import os
 import pandas as pd
 from PIL import Image, ImageColor
 from threading import Lock
+import yaml
 
 
 def args_parse() -> Namespace:
@@ -103,15 +105,19 @@ class BrickColorEstimation(object):
 
     def __init__(self,
                  traced_model_file: str,
-                 colors_table_file: str,
                  colors_types_names_file: str,
-                 device: str = 'cpu'):
+                 device: str = 'cpu',
+                 possible_colors_json_file: str = 'possible_colors.json',
+                 colorinfo_json_file: str = 'colorinfo.json'):
         self.color_type_model = torch.jit.load(traced_model_file)
         self.color_type_model.eval()
         self.color_type_model = self.color_type_model.to(device)
         self.input_shape = (224, 224)
         self.device = device
-        self._prepare_table(colors_table_file)
+
+        self._read_colorinfo_from_file(colorinfo_json_file)
+        self._read_possible_colors_from_file(possible_colors_json_file)
+        self._prepare_table(self.colors)
 
         with open(colors_types_names_file, 'r') as f:
             self.color_types_names = [line.rstrip() for line in f]
@@ -123,28 +129,38 @@ class BrickColorEstimation(object):
             ]
         )
 
-    def _prepare_table(self, table_path):
-        colors_table = pd.read_csv(table_path)
+    def _read_possible_colors_from_file(self, file_path):
 
-        materials = list(set(list(colors_table['color_type'])))
+        with open(file_path) as json_file:
+            self.possible_colors = json.load(json_file)
+            print('[INFO] Loaded {} possible colors from \'{}\'.'.format(len(self.possible_colors), file_path))
+
+    def _read_colorinfo_from_file(self, file_path):
+        with open(file_path) as json_file:
+            self.colors = json.load(json_file)
+            print('[INFO] Loaded information of {} colors  from \'{}\'.'.format(len(self.colors), file_path))
+
+    def _prepare_table(self, colors):
+        materials = set()
+        for dic in colors:
+            materials.add(dic['color_type'])
 
         self.base_by_materials = {
             material_name: {'color_id': [], 'rgb': []}
             for material_name in materials
         }
 
-        for i in range(0, len(colors_table)):
-            hex_cl = '#' + str(colors_table.loc[i]['HEX']).replace(' ', '')
+        for i in range(0, len(colors)):
+            hex_cl = '#' + str(colors[i]['color_code']).replace(' ', '')
             if hex_cl == '#0':
                 hex_cl = '#000000'
-            name = colors_table.loc[i]['ID']
+            name = colors[i]['color_id']
 
             rgb = np.array(ImageColor.getrgb(hex_cl))
             if rgb.shape != (3,):
                 continue
 
-            material = list(
-                colors_table[colors_table['ID'] == name]['color_type'])[0]
+            material = colors[i]['color_type']
             self.base_by_materials[material]['color_id'].append(name)
             self.base_by_materials[material]['rgb'].append(rgb)
 
@@ -163,7 +179,21 @@ class BrickColorEstimation(object):
         ]
         return np.array(dists).argmin()
 
-    def __call__(self, _img: Image) -> tuple:
+    def reduceColorsAvaible(self, partno):
+        for x in self.possible_colors:
+            if x['no'] == partno:
+                break
+        else:
+            x = None
+        if x is not None:
+            print("Found colors for partno '{}': {}".format(partno, x['ids']))
+
+        reduced_by_materials = []
+        # for i in range(0, len(self.base_by_materials)):
+        #     print(self.base_by_materials[i])
+
+
+    def __call__(self, _img: Image, partno: str) -> tuple:
         color_type_idx = self.color_type_model(
             self._preprocess(_img)).detach().to('cpu')[0].argmax()
         type_name = self.color_types_names[color_type_idx]
@@ -174,6 +204,8 @@ class BrickColorEstimation(object):
 
         crop = vec_img[yc - r:yc + r, xc - r:xc + r].copy()
         avg_rgb = crop.mean(axis=(0, 1))
+
+        reduced_by_materials = self.reduceColorsAvaible(partno)
 
         sub_idx = self.find_nearest_color_by_cielab(
             self.base_by_materials[type_name]['rgb'],
@@ -199,9 +231,9 @@ brick_classificator = FunctionServingWrapper(
 brick_color_estimator = FunctionServingWrapper(
     BrickColorEstimation(
         traced_model_file='brick_color_type.torchscript.pt',
-        colors_table_file='LegoSorterDB_Colors.csv',
         colors_types_names_file='color_types.txt',
-        device='cpu'
+        device='cpu',
+        possible_colors_json_file='possible_colors.json'
     )
 )
 
@@ -219,12 +251,12 @@ def solution_inference(img: np.ndarray) -> dict:
     if img is None:
         abort(409)
 
-    cls_num, conf = brick_classificator(img)
-    color_id, color_type = brick_color_estimator(img)
+    partno, partno_conf = brick_classificator(img)
+    color_id, color_type = brick_color_estimator(img, partno)
 
     return {
-        'class': cls_num,
-        'confidence': float('{:.3f}'.format(conf)),
+        'partno': partno,
+        'partno_confidence': float('{:.3f}'.format(partno_conf)),
         'color_id': color_id,
         'color_type': color_type
     }
@@ -263,6 +295,45 @@ def getImageFromPath(image_path, batch=False):
     return image
 
 
+def get_database_cursor():
+    configfile = 'configuration/lego_brick_recognizer_config.yaml'
+    if os.path.exists(configfile):
+        with open(configfile, 'r') as conf_f:
+            config_dict = yaml.safe_load(conf_f)
+        db_connector = DatabaseConnector(config_dict['DATABASE_PROD'])
+        return db_connector.get_cursor()
+
+
+def extract_query_to_object(cur):
+    row_headers = [x[0] for x in cur.description]  # this will extract row headers
+    rv = cur.fetchall()
+    colors = []
+    for result in rv:
+        colors.append(dict(zip(row_headers, result)))
+    return colors
+
+
+def get_colorinfo_from_db():
+    cur = get_database_cursor()
+    cur.execute(
+        """SELECT color_id, color_name, color_code, color_type, parts_count, year_from, year_to FROM 
+        LegoSorterDB.Colors where parts_count > 99 AND color_type IN ('Solid', 'Transparent','Chrome', 'Metallic',
+        'Pearl');""")
+    return extract_query_to_object(cur)
+
+
+def get_possible_colors_from_db():
+    cur = get_database_cursor()
+    cur.execute("""SELECT  p.no as no, JSON_ARRAYAGG(p.color_id) as ids FROM LegoSorterDB.Partdata p 
+           GROUP BY no;""")
+    return extract_query_to_object(cur)
+
+
+def write_json_file(object, filename):
+    with open(filename, 'w') as outfile:
+        json.dump(object, outfile)
+
+
 @app.route('/api/inference/url', methods=['POST'])
 def solution_inference_by_url():
     request_data = request.get_json()
@@ -273,6 +344,22 @@ def solution_inference_by_url():
     image = getImageFromUrl(image_url_str)
 
     return jsonify(solution_inference(image))
+
+
+@app.route('/api/setup/load_possible_colors', methods=['POST'])
+def get_and_save_possible_colors_in_json_file():
+    colors = get_possible_colors_from_db()
+    write_json_file(colors, 'possible_colors.json')
+
+    return jsonify({"task_solved": 'true'})
+
+
+@app.route('/api/setup/load_colorinfo', methods=['POST'])
+def get_and_save_colorinfo_in_json_file():
+    colors = get_colorinfo_from_db()
+    write_json_file(colors, 'colorinfo.json')
+
+    return jsonify({"task_solved": 'true'})
 
 
 @app.route('/api/inference/path', methods=['POST'])
@@ -331,7 +418,8 @@ def solvetasks():
 
             # Store the result
             s.put(serverurl + "/partimages/{image_id}",
-                  data={'id': image_id, 'partno': cls_num, 'confidence_partno': float('{:.3f}'.format(conf)), 'color_id':color_id})
+                  data={'id': image_id, 'partno': cls_num, 'confidence_partno': float('{:.3f}'.format(conf)),
+                        'color_id': color_id})
             # Mark task as completed
             s.put(serverurl + "/tasks/{task_id}/status", data={'id': task_id, 'status_id': 3})
             print("task " + str(task_id) + " completed.")

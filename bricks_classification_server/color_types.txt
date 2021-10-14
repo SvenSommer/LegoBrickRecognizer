@@ -2,3 +2,4 @@ Metallic
 Pearl
 Solid
 Transparent
+Chrome
