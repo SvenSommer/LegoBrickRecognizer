@@ -141,7 +141,7 @@ class BrickColorEstimation(object):
             print('[INFO] Loaded information of {} colors  from \'{}\'.'.format(len(self.colors), file_path))
 
     @staticmethod
-    def _prepare_table(colors, possible_colors=None):
+    def _prepare_table(colors, colors_of_partno=None):
         materials = set()
         for dic in colors:
             materials.add(dic['color_type'])
@@ -152,7 +152,7 @@ class BrickColorEstimation(object):
         }
 
         for i in range(0, len(colors)):
-            if possible_colors is None or (colors[i]['color_id'] in possible_colors):
+            if colors_of_partno is None or (colors[i]['color_id'] in colors_of_partno):
                 hex_cl = '#' + str(colors[i]['color_code']).replace(' ', '')
                 if hex_cl == '#0':
                     hex_cl = '#000000'
@@ -198,15 +198,27 @@ class BrickColorEstimation(object):
         # print("Found colors for partno '{}': {}".format(partno, x['ids']))
         return self._prepare_table(self.colors, json.loads(x['ids']))
 
+    def get_reduced_color_types(self, table):
+        reduced_colors = []
+        for m in table:
+            if table[m]['color_id']:
+                reduced_colors.append(m)
+        return reduced_colors
+
     def __call__(self, _img: Image, partno: str) -> tuple:
         reduced_base_by_materials = self.get_reduced_base_by_partno(partno)
-
-        color_type_idx = self.color_type_model(
-            self._preprocess(_img)).detach().to('cpu')[0].argmax()
+        # TODO: Fix bug if no possible colors for a predicted color_type are available
+        # e.g. http://192.168.178.53:5000/extracted_images/34/run_id_34_id_12972_position_BOTTOM_side_BRIO_MIDDLE.jpg
+        reduced_color_types = self.get_reduced_color_types(reduced_base_by_materials)
+        color_types_prediction = self.color_type_model(
+            self._preprocess(_img)).detach().to('cpu')[0]
+        # print("color_types_prediction: {}".format(color_types_prediction))
+        # print("self.color_types_names: {}".format(self.color_types_names))
+        # print("reduced_color_types: {}".format(reduced_color_types))
+        color_type_idx = color_types_prediction.argmax()
 
         type_name = self.color_types_names[color_type_idx]
-        # TODO: Fix bug if no possible colors for a predicted color_type are available
-        # e.g. http://192.168.178.53:5000/extracted_images/34/run_id_34_id_12149_position_TOP_side_USB.jpg
+
         # Dirty Workaround:
         if len(reduced_base_by_materials[type_name]['rgb']) == 0:
             print("color_type was {} now changing to Solid".format(type_name))
