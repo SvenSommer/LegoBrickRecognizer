@@ -63,8 +63,6 @@ else:
 # Color Request
 colorinfo = ColorInfo(db_connector.get_cursor())
 colors = colorinfo.get_colors()
-for color in colors:
-    print(color)
 
 # Initialize Utils to copy images
 image_mover = ImageMover(db_connector.get_cursor())
