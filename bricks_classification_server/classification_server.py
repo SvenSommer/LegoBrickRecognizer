@@ -399,6 +399,7 @@ def solution_inference_by_url():
 
 @app.route('/api/inference/urls', methods=['POST'])
 def solution_inference_by_urls():
+    timer_start = time.perf_counter()
     image_objects = request.get_json()
     result_inferences = []
     for image_obj in image_objects:
@@ -410,8 +411,9 @@ def solution_inference_by_urls():
         image_obj['color_id'], image_obj['color_type'], image_obj['color_distance'] = brick_color_estimator(image, image_obj['partno'])
         result_inferences.append(image_obj)
     conclusion = concludeBrickProperties(result_inferences)
+    timer_end = time.perf_counter()
 
-    return jsonify(conclusion, result_inferences)
+    return jsonify({"conclusion": conclusion, "images": result_inferences, "elapsedTime": f"{timer_end - timer_start:0.4f} seconds"})
 
 
 @app.route('/api/inference/path', methods=['POST'])
