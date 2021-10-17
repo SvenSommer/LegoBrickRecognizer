@@ -330,25 +330,6 @@ def getImageFromUrl(image_url_str, batch=False):
     return image
 
 
-def getImagesFromUrls(images_url_str, batch=False):
-    result_images = []
-    for image_url_str in images_url_str:
-        try:
-            response = requests.get(image_url_str)
-            result_images.append(Image.open(io.BytesIO(response.content)).convert('RGB'))
-        except Exception as e:
-            logging.error(
-                'From method getImageFromUrl(image_url_str), {}'.format(e)
-            )
-            if batch is False:
-                abort(408)
-            else:
-                # In Case of "SolveTask"-Request we do not want abort the process, but continue with the text image
-                return None
-
-    return result_images
-
-
 def getImageFromPath(image_path, batch=False):
     image = None
     try:
@@ -418,21 +399,16 @@ def solution_inference_by_url():
 
 @app.route('/api/inference/urls', methods=['POST'])
 def solution_inference_by_urls():
-    request_data = request.get_json()
-    if 'urls' not in request_data.keys():
-        abort(405)
-    images_url_str = request_data['urls']
-
-    result_images = getImagesFromUrls(images_url_str)
+    image_objects = request.get_json()
     result_inferences = []
+    for image_obj in image_objects:
+        if 'url' not in image_obj.keys():
+            abort(405)
 
-    for image in result_images:
-        inference = {}
-        partno, inference['partno_confidence'] = brick_classificator(image)
-        inference['color_id'], inference['color_type'], inference['color_distance'] = brick_color_estimator(image,
-                                                                                                            partno)
-        inference['partno'] = partno
-        result_inferences.append(inference)
+        image = getImageFromUrl(image_obj['url'])
+        image_obj['partno'], image_obj['partno_confidence'] = brick_classificator(image)
+        image_obj['color_id'], image_obj['color_type'], image_obj['color_distance'] = brick_color_estimator(image, image_obj['partno'])
+        result_inferences.append(image_obj)
     conclusion = concludeBrickProperties(result_inferences)
 
     return jsonify(conclusion, result_inferences)
