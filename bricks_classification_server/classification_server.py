@@ -97,7 +97,7 @@ class BrickClassification(object):
     def __call__(self, _img: Image) -> tuple:
         out = self.model(self._preprocess(_img)).detach().to('cpu')[0]
         return self.classes_names[out.argmax()], \
-               float(torch.sigmoid(out).max().numpy())
+               float('{:.3f}'.format(torch.sigmoid(out).max().numpy()))
 
 
 class BrickColorEstimation(object):
@@ -243,7 +243,6 @@ class BrickColorEstimation(object):
         crop = vec_img[yc - r:yc + r, xc - r:xc + r].copy()
         avg_rgb = crop.mean(axis=(0, 1))
 
-
         # print("type_name: {}".format(type_name))
         # print("reduced_base_by_materials: {}".format(reduced_base_by_materials))
         sub_idx, dist = self.find_nearest_color_by_cielab(
@@ -253,7 +252,7 @@ class BrickColorEstimation(object):
 
         predicted_color_id = \
             int(reduced_base_by_materials[type_name]['color_id'][sub_idx])
-        return predicted_color_id, type_name, dist
+        return predicted_color_id, type_name, float('{:.3f}'.format(dist))
 
 
 app = Flask(__name__)
@@ -302,6 +301,18 @@ def solution_inference(img: np.ndarray) -> dict:
     }
 
 
+def concludeBrickProperties(inferences):
+    conclusion = {}
+    inferences = sorted(inferences, key=lambda d: d['partno_confidence'], reverse=True)
+    # if inferences[0]['partno_confidence'] > 0.8:
+    conclusion['partno'] = inferences[0]['partno']
+    conclusion['partno_confidence'] = inferences[0]['partno_confidence']
+    inferences = sorted(inferences, key=lambda d: d['color_distance'])
+    conclusion['color_id'] = inferences[0]['color_id']
+    conclusion['color_distance'] = inferences[0]['color_distance']
+    return conclusion
+
+
 def getImageFromUrl(image_url_str, batch=False):
     image = None
     try:
@@ -317,6 +328,25 @@ def getImageFromUrl(image_url_str, batch=False):
             return None
 
     return image
+
+
+def getImagesFromUrls(images_url_str, batch=False):
+    result_images = []
+    for image_url_str in images_url_str:
+        try:
+            response = requests.get(image_url_str)
+            result_images.append(Image.open(io.BytesIO(response.content)).convert('RGB'))
+        except Exception as e:
+            logging.error(
+                'From method getImageFromUrl(image_url_str), {}'.format(e)
+            )
+            if batch is False:
+                abort(408)
+            else:
+                # In Case of "SolveTask"-Request we do not want abort the process, but continue with the text image
+                return None
+
+    return result_images
 
 
 def getImageFromPath(image_path, batch=False):
@@ -386,20 +416,26 @@ def solution_inference_by_url():
     return jsonify(solution_inference(image))
 
 
-@app.route('/api/setup/load_possible_colors', methods=['POST'])
-def get_and_save_possible_colors_in_json_file():
-    colors = get_possible_colors_from_db()
-    write_json_file(colors, 'possible_colors.json')
+@app.route('/api/inference/urls', methods=['POST'])
+def solution_inference_by_urls():
+    request_data = request.get_json()
+    if 'urls' not in request_data.keys():
+        abort(405)
+    images_url_str = request_data['urls']
 
-    return jsonify({"task_solved": 'true'})
+    result_images = getImagesFromUrls(images_url_str)
+    result_inferences = []
 
+    for image in result_images:
+        inference = {}
+        partno, inference['partno_confidence'] = brick_classificator(image)
+        inference['color_id'], inference['color_type'], inference['color_distance'] = brick_color_estimator(image,
+                                                                                                            partno)
+        inference['partno'] = partno
+        result_inferences.append(inference)
+    conclusion = concludeBrickProperties(result_inferences)
 
-@app.route('/api/setup/load_colorinfo', methods=['POST'])
-def get_and_save_colorinfo_in_json_file():
-    colors = get_colorinfo_from_db()
-    write_json_file(colors, 'colorinfo.json')
-
-    return jsonify({"task_solved": 'true'})
+    return jsonify(conclusion, result_inferences)
 
 
 @app.route('/api/inference/path', methods=['POST'])
@@ -454,7 +490,7 @@ def solvetasks():
         else:
 
             partno, partno_conf = brick_classificator(image)
-            color_id, color_type, dist  = brick_color_estimator(image, partno)
+            color_id, color_type, dist = brick_color_estimator(image, partno)
 
             # Store the result
             s.put(serverurl + "/partimages/{image_id}",
@@ -467,6 +503,22 @@ def solvetasks():
         task_counter += 1
     timer_end = time.perf_counter()
     return jsonify({"solvedTasks": task_counter, "elapsedTime": f"{timer_end - timer_start:0.4f} seconds"})
+
+
+@app.route('/api/setup/load_possible_colors', methods=['POST'])
+def get_and_save_possible_colors_in_json_file():
+    colors = get_possible_colors_from_db()
+    write_json_file(colors, 'possible_colors.json')
+
+    return jsonify({"task_solved": 'true'})
+
+
+@app.route('/api/setup/load_colorinfo', methods=['POST'])
+def get_and_save_colorinfo_in_json_file():
+    colors = get_colorinfo_from_db()
+    write_json_file(colors, 'colorinfo.json')
+
+    return jsonify({"task_solved": 'true'})
 
 
 if __name__ == '__main__':
