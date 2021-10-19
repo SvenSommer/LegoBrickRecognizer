@@ -113,7 +113,6 @@ class BricksDataloader(torch.utils.data.Dataset):
         self.augmentations = torchvision.transforms.Compose(
             [
                 torchvision.transforms.ColorJitter(),
-                torchvision.transforms.RandomHorizontalFlip(p=0.5),
                 torchvision.transforms.RandomAffine(
                     15, translate=None,
                     scale=None, shear=None,
@@ -127,7 +126,6 @@ class BricksDataloader(torch.utils.data.Dataset):
                     self.shape,
                     interpolation=Image.NEAREST
                 ),
-                # torchvision.transforms.RandomGrayscale(p=0.1),
                 torchvision.transforms.ToTensor()
             ]
         ) if augmentations else None
