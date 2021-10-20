@@ -29,28 +29,46 @@ class ImageMover:
                 print("Image not found: ", path)
         return
 
-    def move_images(self, dest_folder, reduce_partno):
-        self.cur.execute("""SELECT path, camera, p.partno, p.color_id, c.color_type FROM LegoSorterDB.Partimages i 
+    def create_training_dir_color_id(self, dest_folder):
+        self.cur.execute("""SELECT path, SUBSTRING_INDEX(camera, '_', 1) AS camera, p.color_id, c.color_type FROM LegoSorterDB.Partimages i 
         LEFT JOIN LegoSorterDB.Identifiedparts p ON p.id = i.part_id
         LEFT JOIN LegoSorterDB.Colors c ON p.color_id = c.color_id
         WHERE i.deleted IS NULL AND p.deleted IS NULL
-        and color_type IN ('Solid','Transparent','Pearl','Metallic')""")
+        and camera NOT IN ('BRIO_lower','BRIO','BRIO_center', 'unknown')""")
 
         sqlresult = self.cur.fetchall()
-        print("INFO: Moving {} labeled images to new training_folder {}".format(len(sqlresult), dest_folder))
+        print("INFO: [color_id, color_type] Moving {} labeled images to new training_folder {}".format(len(sqlresult), dest_folder))
 
         for row in self.progressBar(sqlresult):
             path = os.path.join('/home/robert/LegoImageCropper/', row[0])
             camera = row[1]
-            partno = row[2]
-            color_id = row[3]
-            color_type = row[4]
+            color_id = row[2]
+            color_type = row[3]
 
-            self.copy_image(path, os.path.join(dest_folder, 'partno'), str(partno), reduce_partno)
+            self.image_counter = 0
             self.copy_image(path, os.path.join(dest_folder, 'color_id', camera), str(color_id), False)
-            self.copy_image(path, os.path.join(dest_folder, 'color_type',  str(color_type)), str(color_id), False)
+            self.copy_image(path, os.path.join(dest_folder, 'color_type', str(color_type)), str(color_id), False)
 
-        print("INFO: Wrote " + str(self.image_counter) + " image files. Skipped " + str(self.images_skipped) + " Files")
+        print("INFO: [color_id, color_type] Wrote " + str(self.image_counter/2) + "image files (for each Dimension). "
+                                                                                  "Skipped " + str(self.images_skipped))
+
+    def create_training_dir_partno(self, dest_folder, reduce_partno):
+        self.cur.execute("""SELECT path, p.partno FROM LegoSorterDB.Partimages i 
+        LEFT JOIN LegoSorterDB.Identifiedparts p ON p.id = i.part_id
+        WHERE i.deleted IS NULL AND p.deleted IS NULL""")
+
+        sqlresult = self.cur.fetchall()
+        print("INFO: [partno] Moving {} labeled images to new training_folder {}".format(len(sqlresult), dest_folder))
+
+        for row in self.progressBar(sqlresult):
+            path = os.path.join('/home/robert/LegoImageCropper/', row[0])
+            partno = row[1]
+
+            self.image_counter = 0
+            self.copy_image(path, os.path.join(dest_folder, 'partno'), str(partno), reduce_partno)
+
+        print("INFO: [partno] Wrote " + str(self.image_counter) + " image files. Skipped " + str(
+            self.images_skipped) + " Files")
 
     def copy_image(self, imagepath, dest_folder, label, reduce_partno):
 

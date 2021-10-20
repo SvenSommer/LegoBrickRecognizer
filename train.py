@@ -47,9 +47,15 @@ def parse_args() -> Namespace:
 
 
 args = parse_args()
-train_folder = os.path.join(args.dir, 'partno/')
-validation_folder = os.path.join(args.dir, 'partno_val/')
-experiment_folder = os.path.join(args.dir, 'experiments/')
+folder_dict = [{'train': os.path.join(args.dir, 'partno/'),
+                'validation': os.path.join(args.dir, 'partno_val/'),
+                'model': os.path.join(args.dir, 'partno_model/')},
+               {'train': os.path.join(args.dir, 'color_id/USB'),
+                'validation': os.path.join(args.dir, 'color_id_val/USB'),
+                'model': os.path.join(args.dir, 'color_id_model_USB/')},
+               {'train': os.path.join(args.dir, 'color_id/BRIO'),
+                'validation': os.path.join(args.dir, 'color_id_val/BRIO'),
+                'model': os.path.join(args.dir, 'color_id_model_BRIO/')}]
 
 with open(args.config, 'r') as conf_f:
     config_dict = yaml.safe_load(conf_f)
@@ -60,37 +66,38 @@ if args.prod:
 else:
     db_connector = DatabaseConnector(config_dict['DATABASE_PROD'])
 
-# Color Request
-colorinfo = ColorInfo(db_connector.get_cursor())
-colors = colorinfo.get_colors()
-
 # Initialize Utils to copy images
 image_mover = ImageMover(db_connector.get_cursor())
 
 # CREATION of images to train on: Gets the labeled files from the database and moves them into the destination_folder
 if not args.skip_creation:
     print("INFO: reduce_partno is", args.reduce_partno)
-    image_mover.move_images(args.dir, args.reduce_partno)
+    image_mover.create_training_dir_partno(args.dir, args.reduce_partno)
+    image_mover.create_training_dir_color_id(args.dir)
+
     if not os.path.exists(args.dir):
         print("ERROR: working Folder '{}' not existing".format(args.dir))
         quit()
     print("INFO: Splitting images in training and validation set")
     # SPLITTING of the dataset into training an validation set
 
-    splitter = DataSetSplitter(train_folder, validation_folder, 0.2)
-    splitter.split()
+    for folder in folder_dict:
+        print("Working on folder {}".format(folder['train']))
+        splitter = DataSetSplitter(folder['train'], folder['validation'], 0.2).split()
 
 if not os.path.exists(args.dir):
     print("ERROR: working Folder '{}' not existing".format(args.dir))
     quit()
 classes_count = len(next(os.walk(args.dir))[1])
 print("INFO: Found '{}' classes".format(classes_count))
-# TRAIN
-print("INFO: Started training with {} epochs on {} gpu(s).".format(args.epochs, args.gpus_count))
-classifier = CustomTrainingPipeline(
-    train_data_path=train_folder,
-    val_data_path=validation_folder,
-    experiment_folder=experiment_folder,
-    stop_criteria=1E-5
-)
-classifier.fit()
+for folder in folder_dict:
+    print("INFO: Started training on {} with {} epochs on {} gpu(s).".format(folder['train'], args.epochs,
+                                                                             args.gpus_count))
+    # TRAIN
+    classifier = CustomTrainingPipeline(
+        train_data_path=folder['train'],
+        val_data_path=folder['validation'],
+        experiment_folder=folder['model'],
+        stop_criteria=1E-5
+    )
+    classifier.fit()
