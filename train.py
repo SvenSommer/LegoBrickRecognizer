@@ -47,15 +47,15 @@ def parse_args() -> Namespace:
 
 
 args = parse_args()
-folder_dict = [{'train': os.path.join(args.dir, 'partno/'),
-                'validation': os.path.join(args.dir, 'partno_val/'),
-                'model': os.path.join(args.dir, 'partno_model/')},
-               {'train': os.path.join(args.dir, 'color_id/USB'),
-                'validation': os.path.join(args.dir, 'color_id_val/USB'),
-                'model': os.path.join(args.dir, 'color_id_model_USB/')},
-               {'train': os.path.join(args.dir, 'color_id/BRIO'),
-                'validation': os.path.join(args.dir, 'color_id_val/BRIO'),
-                'model': os.path.join(args.dir, 'color_id_model_BRIO/')}]
+folder_dict = [
+    # {'name': 'partno',
+    # 'train': os.path.join(args.dir, 'partno/'),
+    # 'validation': os.path.join(args.dir, 'partno_val/'),
+    # 'model': os.path.join(args.dir, 'partno_experiments/')},
+    {'name': 'color_id',
+     'train': os.path.join(args.dir, 'color_id'),
+     'validation': os.path.join(args.dir, 'color_id_val'),
+     'model': os.path.join(args.dir, 'color_id_experiments/')}]
 
 with open(args.config, 'r') as conf_f:
     config_dict = yaml.safe_load(conf_f)
@@ -90,6 +90,10 @@ if not os.path.exists(args.dir):
     quit()
 classes_count = len(next(os.walk(args.dir))[1])
 print("INFO: Found '{}' classes".format(classes_count))
+
+result_folder = os.path.join(args.dir, 'results')
+if not os.path.exists(result_folder):
+    os.makedirs(result_folder)
 for folder in folder_dict:
     print("INFO: Started training on {} with {} epochs on {} gpu(s).".format(folder['train'], args.epochs,
                                                                              args.gpus_count))
@@ -101,3 +105,8 @@ for folder in folder_dict:
         stop_criteria=1E-5
     )
     classifier.fit()
+    # Move and rename file to results folder
+    new_classes_name = os.path.join(result_folder, 'classes_' + folder['name'] + '.txt')
+    new_pt_model_name = os.path.join(result_folder, 'best_model_' + folder['name'] + '.pt')
+    os.rename(os.path.join(folder['train'], 'classes.txt'), new_classes_name)
+    os.rename(os.path.join(folder['train'], 'traced_best_model.pt'), new_pt_model_name)
