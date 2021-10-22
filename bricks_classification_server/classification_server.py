@@ -112,14 +112,6 @@ brick_classificator = FunctionServingWrapper(
     )
 )
 
-resnet_color_classificator_usb = FunctionServingWrapper(
-    StandardClassification(
-        traced_model_file='color_id_model/traced_best_model_usb.pt',
-        file_names_file='color_id_model/color_classes_usb.txt',
-        device='cpu'
-    )
-)
-
 resnet_color_classificator_brio = FunctionServingWrapper(
     StandardClassification(
         traced_model_file='color_id_model/traced_best_model_brio.pt',
@@ -180,16 +172,15 @@ def concludeBrickProperties(inferences):
             return conclusion
 
 
-def check_if_color_is_for_partno(best_partno, best_color_id):
+def check_if_color_is_for_partno(partno, color_id):
     global possible_colors
     for p_color in possible_colors:
-        if p_color['no'] == best_partno:
-            print("found partno {}".format(p_color['no']))
+        if p_color['no'] == partno:
             break
     else:
         print(" * No possible colors where found for {}".format(partno))
     colors_of_partno = json.loads(p_color['ids'])
-    if int(best_color_id) in colors_of_partno:
+    if int(color_id) in colors_of_partno:
         return True
     else:
         return False
@@ -291,7 +282,8 @@ def solution_inference_by_urls():
         image = getImageFromUrl(image_obj['url'])
         image_obj['partno'], image_obj['partno_confidence'] = brick_classificator(image)
         image_obj['color_id'], image_obj['color_id_confidence'] = resnet_color_classificator_brio(image)
-        result_inferences.append(image_obj)
+        if check_if_color_is_for_partno(image_obj['partno'], image_obj['color_id']):
+            result_inferences.append(image_obj)
     conclusion = concludeBrickProperties(result_inferences)
     timer_end = time.perf_counter()
 
@@ -349,16 +341,18 @@ def solvetasks():
             print(s.put(serverurl + "/tasks/{task_id}/status", data={'id': task_id, 'status_id': 4}).text)
             print("task " + str(task_id) + " had no image at the source available - was skipped.")
         else:
-
             partno, partno_conf = brick_classificator(image)
-            color_id, color_id_conf = resnet_color_classificator_brio(image, partno)
+            color_id, color_id_conf = resnet_color_classificator_brio(image)
+            if not check_if_color_is_for_partno(partno, color_id):
+                s.put(serverurl + "/tasks/{task_id}/status", data={'id': task_id, 'status_id': 5})
+            else:
+                # Store the result
+                s.put(serverurl + "/partimages/{image_id}",
+                      data={'id': image_id, 'partno': partno, 'confidence_partno': float('{:.3f}'.format(partno_conf)),
+                            'color_id': color_id, 'color_id_confidence': float('{:.3f}'.format(color_id_conf))})
+                # Mark task as completed
+                s.put(serverurl + "/tasks/{task_id}/status", data={'id': task_id, 'status_id': 3})
 
-            # Store the result
-            s.put(serverurl + "/partimages/{image_id}",
-                  data={'id': image_id, 'partno': partno, 'confidence_partno': float('{:.3f}'.format(partno_conf)),
-                        'color_id': color_id, 'color_id_confidence': float('{:.3f}'.format(dist))})
-            # Mark task as completed
-            s.put(serverurl + "/tasks/{task_id}/status", data={'id': task_id, 'status_id': 3})
             print("task " + str(task_id) + " completed.")
 
         task_counter += 1

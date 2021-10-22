@@ -39,7 +39,7 @@ class ImageMover:
         WHERE i.deleted IS NULL AND p.deleted IS NULL""")
 
         sql_result = self.cur.fetchall()
-        print("INFO: [partno] Moving {} labeled images to new training_folder {}".format(len(sqlresult), dest_folder))
+        print("INFO: [partno] Moving {} labeled images to new training_folder {}".format(len(sql_result), dest_folder))
 
         for row in self.progressBar(sql_result):
             path = os.path.join('/home/robert/LegoImageCropper/', row[0])

@@ -48,10 +48,10 @@ def parse_args() -> Namespace:
 
 args = parse_args()
 folder_dict = [
-    # {'name': 'partno',
-    # 'train': os.path.join(args.dir, 'partno/'),
-    # 'validation': os.path.join(args.dir, 'partno_val/'),
-    # 'model': os.path.join(args.dir, 'partno_experiments/')},
+    {'name': 'partno',
+     'train': os.path.join(args.dir, 'partno/'),
+     'validation': os.path.join(args.dir, 'partno_val/'),
+     'model': os.path.join(args.dir, 'partno_experiments/')},
     {'name': 'color_id',
      'train': os.path.join(args.dir, 'color_id'),
      'validation': os.path.join(args.dir, 'color_id_val'),
