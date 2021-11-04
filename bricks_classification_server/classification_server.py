@@ -106,16 +106,16 @@ app_log.setLevel(logging.ERROR)
 
 brick_classificator = FunctionServingWrapper(
     StandardClassification(
-        traced_model_file='partno_model/traced_best_model.pt',
-        file_names_file='partno_model/classes.txt',
+        traced_model_file='calc_models/best_model_partno.pt',
+        file_names_file='calc_models/classes_partno.txt',
         device='cpu'
     )
 )
 
 resnet_color_classificator_brio = FunctionServingWrapper(
     StandardClassification(
-        traced_model_file='color_id_model/traced_best_model_brio.pt',
-        file_names_file='color_id_model/color_classes_brio.txt',
+        traced_model_file='calc_models/best_model_color_id.pt',
+        file_names_file='calc_models/classes_color_id.txt',
         device='cpu'
     )
 )

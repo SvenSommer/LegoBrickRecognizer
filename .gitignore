@@ -131,3 +131,5 @@ dmypy.json
 /ldraw_data/dowloaded_data
 /trainingsets/colorid
 /trainingsets/partno
+/configuration/lego_brick_recognizer_config.yaml
+configuration/lego_brick_recognizer_config.yaml

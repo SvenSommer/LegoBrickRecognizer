@@ -3,11 +3,13 @@ import time
 import os
 from argparse import ArgumentParser, Namespace
 from utils.image_mover import ImageMover
+from utils.googledrive_uploader import GoogleDriveUploader
 from utils.database_connector import DatabaseConnector
 from utils.color_info import ColorInfo, Color
 from third_party.train_classificator import CustomTrainingPipeline
 from data_operations.split_classification_dataset_to_train_val_folders import DataSetSplitter
 import yaml
+import shutil
 
 
 def parse_args() -> Namespace:
@@ -60,6 +62,9 @@ folder_dict = [
 with open(args.config, 'r') as conf_f:
     config_dict = yaml.safe_load(conf_f)
 
+g_uploader = GoogleDriveUploader(config_dict['GOOGLE_DRIVE']['access_token'],
+                                 config_dict['GOOGLE_DRIVE']['refresh_token'])
+
 # Connect to Database
 if args.prod:
     db_connector = DatabaseConnector(config_dict['DATABASE_DEBUG'])
@@ -91,9 +96,10 @@ if not os.path.exists(args.dir):
 classes_count = len(next(os.walk(args.dir))[1])
 print("INFO: Found '{}' classes".format(classes_count))
 
-result_folder = os.path.join(args.dir, 'results')
+result_folder = os.path.join(args.dir, 'calc_models')
 if not os.path.exists(result_folder):
     os.makedirs(result_folder)
+
 for folder in folder_dict:
     print("INFO: Started training on {} with {} epochs on {} gpu(s).".format(folder['train'], args.epochs,
                                                                              args.gpus_count))
@@ -108,5 +114,9 @@ for folder in folder_dict:
     # Move and rename file to results folder
     new_classes_name = os.path.join(result_folder, 'classes_' + folder['name'] + '.txt')
     new_pt_model_name = os.path.join(result_folder, 'best_model_' + folder['name'] + '.pt')
-    os.rename(os.path.join(folder['train'], 'classes.txt'), new_classes_name)
-    os.rename(os.path.join(folder['train'], 'traced_best_model.pt'), new_pt_model_name)
+    os.rename(os.path.join(folder['model'], 'classes.txt'), new_classes_name)
+    os.rename(os.path.join(folder['model'], 'traced_best_model.pt'), new_pt_model_name)
+
+archived_file_name = "brick_classification_models" + time.strftime("%Y%m%d_%H%M%S")
+shutil.make_archive(os.path.join(args.dir, archived_file_name), 'zip', result_folder)
+g_uploader.uploadFile(os.path.join(args.dir, archived_file_name + ".zip"), "1-GiY2YP0V1Sh-LnoMKH9_0yaHXAt3Ov0")
