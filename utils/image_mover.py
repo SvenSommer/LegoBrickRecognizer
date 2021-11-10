@@ -13,44 +13,43 @@ class ImageMover:
         self.images_skipped = 0
         self.cur = cursor
 
-    def flip_images_permanently(self):
-        self.cur.execute("""SELECT path FROM LegoSorterDB.Partimages where deleted IS NULL AND  (path like '%left%' or 
-        path like '%right%') order by id asc""")
-
-        sqlresult = self.cur.fetchall()
-        print("INFO: Flipping {} images".format(len(sqlresult)))
-        for row in self.progressBar(sqlresult):
-            path = os.path.join('/home/robert/LegoImageCropper/', row[0])
-            if os.path.exists(path):
-                image = Image.open(path).convert('RGB')
-                image = image.transpose(method=Image.FLIP_LEFT_RIGHT)
-                image.save(path)
-            else:
-                print("Image not found: ", path)
-        return
-
-    def move_images(self, dest_folder, reduce_partno):
-        self.cur.execute("""SELECT path, camera, p.partno, p.color_id, c.color_type FROM LegoSorterDB.Partimages i 
+    def create_training_dir_color_id(self, dest_folder):
+        self.cur.execute("""SELECT path, p.color_id FROM LegoSorterDB.Partimages i 
         LEFT JOIN LegoSorterDB.Identifiedparts p ON p.id = i.part_id
         LEFT JOIN LegoSorterDB.Colors c ON p.color_id = c.color_id
         WHERE i.deleted IS NULL AND p.deleted IS NULL
-        and color_type IN ('Solid','Transparent','Pearl','Metallic')""")
+        and p.color_id != 0
+        and camera NOT IN ('BRIO_lower', 'BRIO', 'BRIO_center', 'unknown', 'USB')""")
 
         sqlresult = self.cur.fetchall()
-        print("INFO: Moving {} labeled images to new training_folder {}".format(len(sqlresult), dest_folder))
-
+        print("INFO: [color_id] Moving {} labeled images to new training_folder {}".format(len(sqlresult),
+                                                                                                       dest_folder))
+        self.image_counter = 0
         for row in self.progressBar(sqlresult):
             path = os.path.join('/home/robert/LegoImageCropper/', row[0])
-            camera = row[1]
-            partno = row[2]
-            color_id = row[3]
-            color_type = row[4]
+            color_id = row[1]
 
+            self.copy_image(path, os.path.join(dest_folder, 'color_id'), str(color_id), False)
+
+        print("INFO: [color_id] Wrote {} image files. Skipped {}.".format(self.image_counter, self.images_skipped))
+
+    def create_training_dir_partno(self, dest_folder, reduce_partno):
+        self.cur.execute("""SELECT path, p.partno FROM LegoSorterDB.Partimages i 
+        LEFT JOIN LegoSorterDB.Identifiedparts p ON p.id = i.part_id
+        WHERE i.deleted IS NULL AND p.deleted IS NULL""")
+
+        sql_result = self.cur.fetchall()
+        print("INFO: [partno] Moving {} labeled images to new training_folder {}".format(len(sql_result), dest_folder))
+
+        for row in self.progressBar(sql_result):
+            path = os.path.join('/home/robert/LegoImageCropper/', row[0])
+            partno = row[1]
+
+            self.image_counter = 0
             self.copy_image(path, os.path.join(dest_folder, 'partno'), str(partno), reduce_partno)
-            self.copy_image(path, os.path.join(dest_folder, 'color_id', camera), str(color_id), False)
-            self.copy_image(path, os.path.join(dest_folder, 'color_type',  str(color_type)), str(color_id), False)
 
-        print("INFO: Wrote " + str(self.image_counter) + " image files. Skipped " + str(self.images_skipped) + " Files")
+        print("INFO: [partno] Wrote " + str(self.image_counter) + " image files. Skipped " + str(
+            self.images_skipped) + " Files")
 
     def copy_image(self, imagepath, dest_folder, label, reduce_partno):
 
@@ -72,53 +71,8 @@ class ImageMover:
             # print("    File already exists: " + file_destination)
             self.images_skipped += 1
 
-    def split_train_test_dataset(self, base_folder):
-        train_folder = os.path.join(base_folder, 'partno/')
-        test_folder = os.path.join(base_folder, 'partno_val/')
-
-        classes_count = 0
-        for folder in tqdm(os.listdir(train_folder)):
-            res_folder = os.path.join(test_folder, folder)
-            os.makedirs(res_folder, exist_ok=True)
-            k = 0
-            classes_count += 1
-            for file_name in sorted(os.listdir(os.path.join(train_folder, folder))):
-                if k > 5:
-                    continue
-                k += 1
-                target_file = os.path.join(train_folder, folder, file_name)
-                save_file = os.path.join(res_folder, file_name)
-                copyfile(target_file, save_file)
-                os.remove(target_file)
-        return classes_count
-
-    def brick_basename_sep(self, bname: str) -> list:
-        """
-        Separate brick name to base and additional names
-        Args:
-            bname: string
-        Returns:
-            List with names
-        Examples:
-            brick_basename_sep('283bc1') -> ['283', 'bc1']
-            brick_basename_sep('283211') -> ['283211']
-            brick_basename_sep('u238') -> ['u238']
-        """
-        name_char_i = 0
-        while True:
-            if name_char_i >= len(bname):
-                break
-            if not bname[name_char_i].isnumeric():
-                if name_char_i == 0:
-                    name_char_i += 1
-                    continue
-                break
-            name_char_i += 1
-        if name_char_i == len(bname):
-            return [bname]
-        return [bname[:name_char_i], bname[name_char_i:]]
-
-    def progressBar(self, iterable, prefix='Progress', suffix='Moved', decimals=1, length=50, fill='█', printEnd="\r"):
+    @staticmethod
+    def progressBar(iterable, prefix='Progress', suffix='Moved', decimals=1, length=50, fill='█', printEnd="\r"):
         """
         Call in a loop to create terminal progress bar
         @params:
