@@ -21,6 +21,7 @@ class CustomTrainingPipeline(object):
                  visdom_port: int = 9000,
                  batch_size: int = 32,
                  epochs: int = 200,
+                 resume_epoch: int = 1,
                  stop_criteria: float = 1E-7,
                  device: str = 'cuda'):
         """
@@ -48,6 +49,7 @@ class CustomTrainingPipeline(object):
         self.visdom_port = visdom_port  # Set None to disable
         self.batch_size = batch_size
         self.epochs = epochs
+        self.resume_epoch = resume_epoch
         self.stop_criteria = stop_criteria
         self.best_test_score = 0
 
@@ -279,7 +281,7 @@ class CustomTrainingPipeline(object):
         return self.get_lr() - self.stop_criteria < -1E-9
 
     def fit(self):
-        for epoch_num in range(1, self.epochs + 1):
+        for epoch_num in range(self.resume_epoch, self.epochs + 1):
             epoch_train_loss = self._train_step(epoch_num)
             val_loss, val_acc = self._validation_step()
             self._plot_values(epoch_num, epoch_train_loss, val_loss, val_acc)
@@ -307,7 +309,10 @@ def parse_args() -> Namespace:
         '--epochs', type=int, required=False, default=200
     ),
     parser.add_argument(
-        '--pretrain_weights', type=str, required=False,
+        '--resume-epoch', type=int, required=False, default=1
+    ),
+    parser.add_argument(
+        '--load_path', type=str, required=False,
         help='Path to model weights to load.'
     )
     parser.add_argument(
@@ -328,9 +333,10 @@ if __name__ == '__main__':
         train_data_path=args.train_data,
         val_data_path=args.test_data,
         experiment_folder=args.experiment_folder,
-        load_path=args.pretrain_weights,
+        load_path=args.load_path,
         visdom_port=args.visdom_port,
         epochs=args.epochs,
+        resume_epoch = args.resume_epoch,
         batch_size=args.batch_size,
         model=torchvision.models.mobilenet_v2(False)
     ).fit()

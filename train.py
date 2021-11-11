@@ -28,6 +28,10 @@ def parse_args() -> Namespace:
         help='Epochs count for training'
     )
     parser.add_argument(
+        '--resume-epoch', type=int, required=False, default=1,
+        help='Epochs count where to resume training'
+    )
+    parser.add_argument(
         '--gpus_count', type=int, required=False, default=1,
         help='GPU used for training'
     )
@@ -67,9 +71,10 @@ g_uploader = GoogleDriveUploader(config_dict['GOOGLE_DRIVE']['access_token'],
 
 # Connect to Database
 if args.prod:
-    db_connector = DatabaseConnector(config_dict['DATABASE_DEBUG'])
-else:
     db_connector = DatabaseConnector(config_dict['DATABASE_PROD'])
+else:
+    db_connector = DatabaseConnector(config_dict['DATABASE_DEBUG'])
+
 
 # Initialize Utils to copy images
 image_mover = ImageMover(db_connector.get_cursor())
@@ -108,6 +113,8 @@ for folder in folder_dict:
         train_data_path=folder['train'],
         val_data_path=folder['validation'],
         experiment_folder=folder['model'],
+        load_path=os.path.join(folder['model'], 'checkpoints', 'best.trh'),
+        resume_epoch=args.resume_epoch,
         stop_criteria=1E-5
     )
     classifier.fit()
