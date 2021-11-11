@@ -174,7 +174,8 @@ class BricksDataloader(torch.utils.data.Dataset):
 
                         # Pillow only load head information of file
                         try:
-                            _ = Image.open(img_full_path)
+                            _ = np.array(
+                                Image.open(img_full_path).convert('RGB'))
                         except Exception as e:
                             print(
                                 '{} has been skipped, because: {}'.format(
