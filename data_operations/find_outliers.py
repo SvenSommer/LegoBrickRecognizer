@@ -4,6 +4,7 @@ from tqdm import tqdm
 import os
 from shutil import copyfile
 from PIL import Image
+from sklearn.neighbors import LocalOutlierFactor
 import sys
 
 sys.path.insert(
@@ -37,6 +38,10 @@ def parse_args() -> Namespace:
         '-o', '--output', required=True, type=str,
         help='Path to result folder'
     )
+    parser.add_argument(
+        '-t', '--threshold', required=False, type=float, default=0.5,
+        help='Filtration threshold'
+    )
     return parser.parse_args()
 
 
@@ -59,28 +64,45 @@ def prepare_paths(input_folder_path: str) -> list:
 def save_outliers(res_folder_paths: list,
                   classes_names_and_confidences:list,
                   save_path: str):
+    os.makedirs(save_path, exist_ok=True)
+
     for sample_idx, sample_path in enumerate(res_folder_paths):
         save_sample_path = os.path.join(
             save_path,
-            classes_names_and_confidences[sample_idx][0],
+            # classes_names_and_confidences[sample_idx][0],
             '{:.2f}_'.format(
                 classes_names_and_confidences[sample_idx][1]
             ) + os.path.basename(sample_path)
         )
 
-        os.makedirs(
-            os.path.join(
-                save_path,
-                classes_names_and_confidences[sample_idx][0]
-            ),
-            exist_ok=True
-        )
+        # os.makedirs(
+        #     os.path.join(
+        #         save_path,
+        #         classes_names_and_confidences[sample_idx][0]
+        #     ),
+        #     exist_ok=True
+        # )
 
         copyfile(sample_path, save_sample_path)
 
 
 def find_outliers(
-        model_path: str, classes_names_path: str, input_paths: list) -> tuple:
+        model_path: str,
+        classes_names_path: str,
+        input_paths: list,
+        threshold: float = 0.5) -> tuple:
+    """
+    Find outliers in folder
+    Args:
+        model_path: path to traced model file
+        classes_names_path: path fo text file with classes names
+        input_paths: List with input images paths
+        threshold: filtration radius threshold, see: https://scikit-learn.org/stable/auto_examples/neighbors/plot_lof_outlier_detection.html
+            the less threshold the greater filtered count
+
+    Returns:
+        List with outlier paths, outliers classes names, filtration confidences
+    """
     cls_model = StandardClassification(model_path, classes_names_path)
 
     pred_names = []
@@ -101,7 +123,10 @@ def find_outliers(
 
     for class_index, class_name in enumerate(cls_model.classes_names):
         target_vectors = pred_vectors[
-            pred_vectors.argmax(axis=1) == class_index][:, class_index]
+            pred_vectors.argmax(axis=1) == class_index]
+
+        if len(target_vectors) < 2:
+            continue
 
         target_paths = []
         target_names = []
@@ -110,13 +135,22 @@ def find_outliers(
                 target_paths.append(input_paths[_i])
                 target_names.append(pred_names[_i])
 
-        normed_values = (target_vectors - target_vectors.mean()
-                         ) / (target_vectors.std() + 1E-5)
+        clf = LocalOutlierFactor(
+            n_neighbors=max(len(target_vectors) // 10, 1),
+            contamination=0.1
+        )
 
-        for sample_index, v in enumerate(normed_values):
-            if v > 1.5:
+        _ = clf.fit_predict(target_vectors)
+        X_scores = clf.negative_outlier_factor_
+        radius = (X_scores.max() - X_scores) / (X_scores.max() - X_scores.min() + 1E-5)
+
+        # normed_values = (target_vectors - target_vectors.mean()
+        #                  ) / (target_vectors.std() + 1E-5)
+
+        for sample_index, r in enumerate(radius):
+            if r - threshold > 1E-5:
                 outlier_paths.append(target_paths[sample_index])
-                outlier_confidences.append(1)
+                outlier_confidences.append(r / 1)
                 outlier_classes_names.append(target_names[sample_index])
 
     return outlier_paths, outlier_classes_names, outlier_confidences
@@ -127,5 +161,5 @@ if __name__ == '__main__':
 
     sample_paths = prepare_paths(args.input)
     outliers_p, outliers_n, outliers_c = find_outliers(
-        args.model, args.classes, sample_paths)
+        args.model, args.classes, sample_paths, args.threshold)
     save_outliers(outliers_p, list(zip(outliers_n, outliers_c)), args.output)
