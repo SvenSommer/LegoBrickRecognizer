@@ -170,6 +170,17 @@ class BricksDataloader(torch.utils.data.Dataset):
                     cls_i = self.classes_names.index(cls_name)
 
                     for image_name in os.listdir(folder_path):
+                        img_full_path = os.path.join(folder_path, image_name)
+
+                        # Pillow only load head information of file
+                        try:
+                            _ = Image.open(img_full_path)
+                        except Exception as e:
+                            print(
+                                '{} has been skipped, because: {}'.format(
+                                    img_full_path, e)
+                            )
+
                         f.write(
                             '{}, {}\n'.format(
                                 os.path.join(folder_path, image_name),
