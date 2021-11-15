@@ -5,6 +5,7 @@ import torch
 from torch.utils import data
 import torchvision
 import os
+# from vit_pytorch import ViT
 
 from third_party.dataloader import BricksDataloader
 from third_party.callbacks import VisImagesGrid, VisPlot
@@ -125,7 +126,7 @@ class CustomTrainingPipeline(object):
         self.model = self.model.to(device)
 
         self.criterion = torch.nn.CrossEntropyLoss()
-        self.optimizer = RAdam(params=model.parameters(), lr=0.001)
+        self.optimizer = RAdam(params=self.model.parameters(), lr=0.001)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, verbose=True, factor=0.1
         )
@@ -135,6 +136,20 @@ class CustomTrainingPipeline(object):
             return param_group['lr']
 
     def _change_last_model_layer(self, num_classes):
+        # if self.model is None:
+        #     self.model = ViT(
+        #         image_size = 256,
+        #         patch_size = 32,
+        #         num_classes = num_classes,
+        #         dim = 1024,
+        #         depth = 6,
+        #         heads = 16,
+        #         mlp_dim = 2048,
+        #         dropout = 0.1,
+        #         emb_dropout = 0.1
+        #     )
+        #     return
+
         fc_layer_name = list(self.model.state_dict().keys())[-1].split('.')[0]
 
         fc_layer_name_element = getattr(
